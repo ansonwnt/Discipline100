@@ -17,7 +17,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.discipline100.app",
       "infoPlist": {
-        "NSAlarmKitUsageDescription": "Discipline100 needs alarm access to wake you up at your scheduled time."
+        "NSAlarmKitUsageDescription": "Discipline100 needs alarm access to wake you up at your scheduled time.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -38,6 +39,13 @@
     "plugins": [
       "expo-router",
       "./modules/alarm-service/app.plugin.js"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d0b3c4f8-a500-4f03-93ad-4dab0c8fb57e"
+      }
+    },
+    "owner": "ansonwnt"
   }
 }

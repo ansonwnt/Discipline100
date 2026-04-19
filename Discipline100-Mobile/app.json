@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Discipline100",
+    "slug": "discipline100",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "discipline100",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFD700"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.discipline100.app",
+      "infoPlist": {
+        "NSAlarmKitUsageDescription": "Discipline100 needs alarm access to wake you up at your scheduled time."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFD700"
+      },
+      "package": "com.discipline100.app",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "./modules/alarm-service/app.plugin.js"
+    ]
+  }
+}

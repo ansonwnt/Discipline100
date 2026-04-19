@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["AlarmServiceModule"]
+  },
+  "android": {
+    "modules": ["com.discipline100.alarmservice.AlarmServiceModule"]
+  }
+}

@@ -16,9 +16,18 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.discipline100.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSAlarmKitUsageDescription": "Discipline100 needs alarm access to wake you up at your scheduled time.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.56434363051-4js3meu263qukc73lc7n5c900ieb27va"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -26,6 +35,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFD700"
       },
+      "googleServicesFile": "./google-services.json",
       "package": "com.discipline100.app",
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -38,7 +48,12 @@
     },
     "plugins": [
       "expo-router",
-      "./modules/alarm-service/app.plugin.js"
+      "./modules/alarm-service/app.plugin.js",
+      ["@react-native-firebase/app", { "ios_use_frameworks": "static" }],
+      "@react-native-firebase/auth",
+      "expo-apple-authentication",
+      "@react-native-google-signin/google-signin",
+      "./plugins/firebase-modular-headers.js"
     ],
     "extra": {
       "router": {},

@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { loadState, saveState } from '../utils/storage';
 import { syncAlarmsToNative } from '../utils/alarmSync';
-import { STARTING_SCORE, MAX_ALARMS, MAX_HISTORY } from '../constants/config';
+import { pushToFirestore, pullFromFirestore, createUserDoc } from '../utils/firestoreSync';
+import { MAX_ALARMS, MAX_HISTORY, snoozeCostCents, formatUSD, TierKey } from '../constants/config';
 
 // ===== Types =====
 export interface Alarm {
@@ -14,21 +15,31 @@ export interface HistoryEntry {
   time: string;
   date: string; // "YYYY-MM-DD"
   snoozeNum: number;
-  cost: number;
+  cost: number; // in cents (0 = free)
 }
 
 export interface AppState {
-  score: number;
+  balance: number; // cents
+  tier: TierKey | null;
+  dailySnoozeCount: number;
+  dailySnoozeDate: string; // "YYYY-MM-DD"
   alarms: Alarm[];
-  snoozeCount: number;
+  snoozeCount: number; // within current alarm session
   activeAlarmId: number | null;
   history: HistoryEntry[];
   name: string;
   onboarded: boolean;
 }
 
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const defaultState: AppState = {
-  score: STARTING_SCORE,
+  balance: 0,
+  tier: null,
+  dailySnoozeCount: 0,
+  dailySnoozeDate: todayStr(),
   alarms: [],
   snoozeCount: 0,
   activeAlarmId: null,
@@ -48,7 +59,9 @@ type Action =
   | { type: 'TRIGGER_ALARM'; id: number }
   | { type: 'SNOOZE' }
   | { type: 'DISMISS' }
-  | { type: 'SET_STATE'; state: Partial<AppState> };
+  | { type: 'SET_STATE'; state: Partial<AppState> }
+  | { type: 'SET_BALANCE'; balance: number; tier?: TierKey | null }
+  | { type: 'RESET_AFTER_WITHDRAWAL' };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -63,7 +76,7 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'ADD_ALARM': {
       if (state.alarms.length >= MAX_ALARMS) return state;
-      if (state.score <= 0) return state;
+      if (state.balance <= 0 || !state.tier) return state;
       const newAlarm: Alarm = { id: Date.now(), time: action.time, enabled: true };
       return { ...state, alarms: [...state.alarms, newAlarm] };
     }
@@ -88,18 +101,31 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, activeAlarmId: action.id };
 
     case 'SNOOZE': {
+      if (!state.tier) return state;
+
       const now = new Date();
-      const cost = state.snoozeCount > 0 ? 1 : 0;
+      const today = todayStr();
+
+      // Reset daily count if it's a new day
+      const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
+
+      const costCents = snoozeCostCents(state.tier, dailyCount);
+      // Charge what's left if balance < cost
+      const actualCost = Math.min(costCents, state.balance);
+
       const newEntry: HistoryEntry = {
         time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        date: now.toISOString().slice(0, 10),
+        date: today,
         snoozeNum: state.snoozeCount + 1,
-        cost,
+        cost: actualCost,
       };
       const history = [newEntry, ...state.history].slice(0, MAX_HISTORY);
+
       return {
         ...state,
-        score: state.score - cost,
+        balance: state.balance - actualCost,
+        dailySnoozeCount: dailyCount + 1,
+        dailySnoozeDate: today,
         snoozeCount: state.snoozeCount + 1,
         history,
       };
@@ -118,6 +144,22 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'SET_STATE':
       return { ...state, ...action.state };
+
+    case 'SET_BALANCE':
+      return {
+        ...state,
+        balance: action.balance,
+        ...(action.tier !== undefined ? { tier: action.tier } : {}),
+      };
+
+    case 'RESET_AFTER_WITHDRAWAL':
+      return {
+        ...state,
+        balance: 0,
+        tier: null,
+        dailySnoozeCount: 0,
+        dailySnoozeDate: todayStr(),
+      };
 
     default:
       return state;
@@ -152,14 +194,14 @@ function seedDemoData(s: AppState): AppState {
   // 6 days ago — bad day, 5 snoozes
   if (td - 6 >= 1) {
     for (let i = 1; i <= 5; i++) {
-      history.push({ time: `07:${(i * 5).toString().padStart(2, '0')} AM`, date: dateStr(td - 6), snoozeNum: i, cost: i === 1 ? 0 : 1 });
+      history.push({ time: `07:${(i * 5).toString().padStart(2, '0')} AM`, date: dateStr(td - 6), snoozeNum: i, cost: i === 1 ? 0 : 100 });
     }
   }
 
   // 5 days ago — ok, 3 snoozes
   if (td - 5 >= 1) {
     for (let i = 1; i <= 3; i++) {
-      history.push({ time: `07:${(i * 5).toString().padStart(2, '0')} AM`, date: dateStr(td - 5), snoozeNum: i, cost: i === 1 ? 0 : 1 });
+      history.push({ time: `07:${(i * 5).toString().padStart(2, '0')} AM`, date: dateStr(td - 5), snoozeNum: i, cost: i === 1 ? 0 : 100 });
     }
   }
 
@@ -175,7 +217,8 @@ function seedDemoData(s: AppState): AppState {
 
   return {
     ...s,
-    score: 92,
+    balance: 4400, // $44.00
+    tier: 'discipline_guy',
     alarms: [
       { id: 1, time: '07:00', enabled: true },
       { id: 2, time: '08:30', enabled: false },
@@ -186,27 +229,68 @@ function seedDemoData(s: AppState): AppState {
   };
 }
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppProvider({ children, uid }: { children: React.ReactNode; uid?: string | null }) {
   const [state, dispatch] = useReducer(reducer, defaultState);
   const [loaded, setLoaded] = React.useState(false);
+  const prevUid = useRef<string | null>(null);
+  const justLoaded = useRef(false);
 
-  // Load state on mount
+  // Load state on mount or when uid changes (sign-in/sign-out)
   useEffect(() => {
-    loadState(defaultState).then(saved => {
-      dispatch({ type: 'LOAD', state: saved });
+    const load = async () => {
+      setLoaded(false);
+
+      if (uid && uid !== prevUid.current) {
+        // User signed in — try to pull from Firestore first
+        const cloudData = await pullFromFirestore(uid);
+        if (cloudData) {
+          dispatch({ type: 'LOAD', state: { ...defaultState, ...cloudData } });
+        } else {
+          // New user — load local data and push to Firestore
+          const localData = await loadState(defaultState);
+          dispatch({ type: 'LOAD', state: localData });
+          await createUserDoc(uid, localData.name || '');
+          if (localData.onboarded) {
+            await pushToFirestore(uid, localData);
+          }
+        }
+      } else if (prevUid.current) {
+        // User signed out — reset to defaults, clear local data
+        dispatch({ type: 'LOAD', state: defaultState });
+      } else {
+        // No user on initial load — load from local storage
+        const saved = await loadState(defaultState);
+        dispatch({ type: 'LOAD', state: saved });
+      }
+
+      prevUid.current = uid || null;
+      justLoaded.current = true;
       setLoaded(true);
-    });
-  }, []);
+    };
+    load();
+  }, [uid]);
 
-  // Save state on every change + sync alarms to native
+  // Save state on every change + sync alarms + push to Firestore
   useEffect(() => {
+    if (!loaded) return;
+
+    // Skip the first render right after LOAD to avoid push-after-pull race
+    if (justLoaded.current) {
+      justLoaded.current = false;
+      return;
+    }
+
     if (state.onboarded || state.name) {
       saveState(state);
     }
-    if (loaded) {
-      syncAlarmsToNative(state.alarms);
+
+    syncAlarmsToNative(state.alarms);
+
+    // Push to Firestore if signed in
+    if (uid) {
+      pushToFirestore(uid, state);
     }
-  }, [state, loaded]);
+  }, [state, loaded, uid]);
 
   return (
     <AppContext.Provider value={{ state, loaded, dispatch }}>
@@ -231,9 +315,9 @@ export function getGreeting(): string {
   return 'Good evening,';
 }
 
-export function guiltMsg(snoozeCount: number, score: number, name: string): string {
+export function guiltMsg(snoozeCount: number, balance: number, name: string): string {
   if (snoozeCount === 0) return name ? `Rise and shine, ${name}!` : 'Rise and shine, champ!';
-  if (score < -5) return ['You\'re buried in debt!', 'How deep will you go?!', 'This is getting embarrassing...', 'WAKE UP!'][Math.min(snoozeCount - 1, 3)];
-  if (score < 0) return ['You\'re in DEBT now!', 'Negative score... really?', 'Stop! You owe points!'][Math.min(snoozeCount - 1, 2)];
-  return ['That cost you 1 point...', 'Another point gone!', 'Your score is melting...', 'Seriously? Again?!', 'Points don\'t grow on trees!'][Math.min(snoozeCount - 1, 4)];
+  if (balance <= 0) return ['You\'re out of funds!', 'Balance empty... keep going?!', 'This is getting expensive...', 'WAKE UP!'][Math.min(snoozeCount - 1, 3)];
+  if (balance < 500) return ['Running low on funds!', 'Your balance is shrinking...', 'Almost out!'][Math.min(snoozeCount - 1, 2)];
+  return ['That cost you real money...', 'Another dollar gone!', 'Your balance is melting...', 'Seriously? Again?!', 'Money doesn\'t grow on trees!'][Math.min(snoozeCount - 1, 4)];
 }

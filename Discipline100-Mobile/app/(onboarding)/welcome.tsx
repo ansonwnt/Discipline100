@@ -28,7 +28,7 @@ export default function Welcome() {
         </Animated.View>
 
         <Text style={styles.title}>Stop snoozing.{'\n'}Start winning.</Text>
-        <Text style={styles.sub}>Every snooze costs you points. Stay disciplined, keep your score.</Text>
+        <Text style={styles.sub}>Every snooze costs real money. Stay disciplined, keep your deposit.</Text>
 
         <Pressable style={styles.btn} onPress={() => router.push('/(onboarding)/how-it-works')}>
           <Text style={styles.btnText}>GET STARTED</Text>

@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { Colors } from '../../src/constants/colors';
 import { useApp, HistoryEntry } from '../../src/context/AppContext';
+import { formatUSD } from '../../src/constants/config';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { perfClass } from '../../src/utils/streak';
@@ -88,14 +89,14 @@ export default function HistoryScreen() {
                       <View>
                         <Text style={styles.dayLabel}>{formatDateLabel(group.date)}</Text>
                         <Text style={styles.daySummary}>
-                          {group.entries.length} snooze{group.entries.length > 1 ? 's' : ''} · {group.totalCost > 0 ? `−${group.totalCost} pts` : 'no cost'}
+                          {group.entries.length} snooze{group.entries.length > 1 ? 's' : ''} · {group.totalCost > 0 ? `−${formatUSD(group.totalCost)}` : 'no cost'}
                         </Text>
                       </View>
                     </View>
                     <View style={styles.dayRight}>
                       <View style={[styles.dayBadge, { backgroundColor: colors.badge }]}>
                         <Text style={[styles.dayBadgeText, { color: colors.badgeText }]}>
-                          {group.totalCost > 0 ? `−${group.totalCost}` : '0'}
+                          {group.totalCost > 0 ? `−${formatUSD(group.totalCost)}` : '$0'}
                         </Text>
                       </View>
                       <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.grayDark} />
@@ -115,7 +116,7 @@ export default function HistoryScreen() {
                             <Text style={styles.entryTime}>{e.time}</Text>
                           </View>
                           <Text style={[styles.entryCost, { color: e.cost === 0 ? Colors.green : Colors.red }]}>
-                            {e.cost === 0 ? 'FREE' : '−1 pt'}
+                            {e.cost === 0 ? 'FREE' : `−${formatUSD(e.cost)}`}
                           </Text>
                         </View>
                       ))}

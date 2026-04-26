@@ -5,8 +5,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 const steps = [
   { num: '1', title: 'Set your alarm', desc: 'Pick your wake-up time with the scroll wheel', color: Colors.yellowLight, textColor: Colors.brown },
-  { num: '2', title: 'Snooze = lose points', desc: 'First snooze is free. After that, each one costs 1 point', color: Colors.redLight, textColor: Colors.red },
-  { num: '3', title: 'Stay disciplined', desc: 'Hit 0 and you can\'t set alarms until you top up', color: Colors.greenLight, textColor: Colors.green },
+  { num: '2', title: 'Snooze = lose money', desc: 'First snooze is free. After that, each one costs real money from your deposit', color: Colors.redLight, textColor: Colors.red },
+  { num: '3', title: 'Stay disciplined', desc: 'Withdraw your remaining balance anytime. Your deposit is fully refundable', color: Colors.greenLight, textColor: Colors.green },
 ];
 
 export default function HowItWorks() {

@@ -1,37 +1,14 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
 import { Colors } from '../../src/constants/colors';
 import { useApp } from '../../src/context/AppContext';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function WalletReveal() {
   const router = useRouter();
   const { state, dispatch } = useApp();
-  const [counter, setCounter] = useState(0);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    const timer = setTimeout(() => {
-      interval = setInterval(() => {
-        setCounter(prev => {
-          const next = prev + Math.ceil((100 - prev) / 8) || 1;
-          if (next >= 100) {
-            if (interval) clearInterval(interval);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            return 100;
-          }
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          return next;
-        });
-      }, 40);
-    }, 600);
-    return () => {
-      clearTimeout(timer);
-      if (interval) clearInterval(interval);
-    };
-  }, []);
 
   const handleGo = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -45,19 +22,33 @@ export default function WalletReveal() {
         <Text style={styles.greeting}>
           {state.name ? `Hey ${state.name}!` : 'Hey there!'}
         </Text>
-        <Text style={styles.title}>Here's your starting score</Text>
+        <Text style={styles.title}>Your Wallet</Text>
 
         <Animated.View entering={FadeInUp.delay(300).springify()} style={styles.wallet}>
           <View style={styles.walletShine} />
-          <Text style={styles.walletLabel}>YOUR SCORE</Text>
-          <View style={styles.scoreRow}>
-            <Text style={styles.score}>{counter}</Text>
-            <Text style={styles.unit}>pts</Text>
+          <Text style={styles.walletLabel}>YOUR BALANCE</Text>
+          <View style={styles.balanceRow}>
+            <Text style={styles.balance}>$0.00</Text>
+          </View>
+        </Animated.View>
+
+        <Animated.View entering={FadeInUp.delay(600).springify()} style={styles.infoCards}>
+          <View style={styles.infoCard}>
+            <Ionicons name="shield-checkmark" size={20} color={Colors.green} />
+            <Text style={styles.infoText}>Make a refundable deposit to start</Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Ionicons name="cash-outline" size={20} color={Colors.red} />
+            <Text style={styles.infoText}>Every snooze costs real money</Text>
+          </View>
+          <View style={styles.infoCard}>
+            <Ionicons name="wallet-outline" size={20} color={Colors.yellow} />
+            <Text style={styles.infoText}>Withdraw your balance anytime</Text>
           </View>
         </Animated.View>
 
         <Text style={styles.note}>
-          Use them wisely. Every snooze after the first costs a point.
+          You'll choose your deposit tier when you set your first alarm.
         </Text>
 
         <Pressable style={styles.btn} onPress={handleGo}>
@@ -85,7 +76,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.yellow, overflow: 'hidden',
     shadowColor: Colors.yellow, shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25, shadowRadius: 15, elevation: 10,
-    marginBottom: 16,
+    marginBottom: 24,
   },
   walletShine: {
     position: 'absolute', top: -40, right: -40,
@@ -96,10 +87,18 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '800', color: 'rgba(139,69,19,0.7)',
     letterSpacing: 2, marginBottom: 8,
   },
-  scoreRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  score: { fontSize: 64, fontWeight: '700', color: Colors.black },
-  unit: { fontSize: 20, fontWeight: '800', color: 'rgba(26,26,26,0.5)' },
-  note: { fontSize: 14, fontWeight: '600', color: Colors.grayDark, textAlign: 'center', marginBottom: 40, lineHeight: 21 },
+  balanceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  balance: { fontSize: 52, fontWeight: '700', color: Colors.black },
+  infoCards: { width: '100%', gap: 10, marginBottom: 24 },
+  infoCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.gray, borderRadius: 14, padding: 14,
+  },
+  infoText: { fontSize: 14, fontWeight: '700', color: Colors.black, flex: 1 },
+  note: {
+    fontSize: 13, fontWeight: '600', color: Colors.grayDark,
+    textAlign: 'center', marginBottom: 32, lineHeight: 19,
+  },
   btn: {
     width: '100%', paddingVertical: 18, backgroundColor: Colors.yellow,
     borderRadius: 16, alignItems: 'center',

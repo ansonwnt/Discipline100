@@ -5,7 +5,20 @@ const STATE_KEY = 'discipline100_state';
 export async function loadState<T>(defaultValue: T): Promise<T> {
   try {
     const raw = await AsyncStorage.getItem(STATE_KEY);
-    if (raw) return { ...defaultValue, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+
+      // Migration: old state had `score` instead of `balance`
+      if ('score' in parsed && !('balance' in parsed)) {
+        parsed.balance = 0; // Fresh start — old abstract points don't convert to money
+        parsed.tier = null;
+        parsed.dailySnoozeCount = 0;
+        parsed.dailySnoozeDate = '';
+        delete parsed.score;
+      }
+
+      return { ...defaultValue, ...parsed };
+    }
   } catch (e) {}
   return defaultValue;
 }

@@ -49,10 +49,19 @@
     "plugins": [
       "expo-router",
       "./modules/alarm-service/app.plugin.js",
-      ["@react-native-firebase/app", { "ios_use_frameworks": "static" }],
+      "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "expo-apple-authentication",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "buildReactNativeFromSource": true
+          }
+        }
+      ]
     ],
     "extra": {
       "router": {},

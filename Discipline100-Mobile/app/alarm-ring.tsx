@@ -2,9 +2,11 @@ import { View, Text, Pressable, TextInput, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { Colors } from '../src/constants/colors';
-import { HOLD_DURATION_MS, SNOOZE_DURATION_MS } from '../src/constants/config';
+import { HOLD_DURATION_MS, SNOOZE_DURATION_MS, snoozeCostCents, formatUSD } from '../src/constants/config';
 import { stopNativeSound, scheduleSnoozeAlarm } from '../src/utils/alarmSync';
 import { useApp, fmt12, guiltMsg } from '../src/context/AppContext';
+import { useAuth } from '../src/context/AuthContext';
+import { deductSnoozeBalance } from '../src/utils/firestoreSync';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +26,7 @@ export default function AlarmRingScreen() {
   const router = useRouter();
   const { alarmId } = useLocalSearchParams<{ alarmId: string }>();
   const { state, dispatch } = useApp();
+  const { user } = useAuth();
   const [step, setStep] = useState<Step>('alarm');
   const [mathProblem, setMathProblem] = useState('');
   const [mathAnswer, setMathAnswer] = useState(0);
@@ -91,8 +94,20 @@ export default function AlarmRingScreen() {
   // ===== SNOOZE =====
   const handleSnooze = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
+    // Calculate cost before dispatch (dispatch will also calculate, but we need it for server deduction)
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
+    const costCents = state.tier ? snoozeCostCents(state.tier, dailyCount) : 0;
+    const actualCost = Math.min(costCents, state.balance);
+
     dispatch({ type: 'SNOOZE' });
     stopAlarmSound();
+
+    // Server-side deduction
+    if (user && actualCost > 0) {
+      deductSnoozeBalance(user.uid, actualCost);
+    }
 
     // Schedule native snooze alarm
     if (alarm) {
@@ -256,8 +271,8 @@ export default function AlarmRingScreen() {
       <Text style={styles.alarmTime}>{alarm ? fmt12(alarm.time) : ''}</Text>
       <Text style={styles.alarmLabel}>WAKE UP!</Text>
 
-      <Text style={[styles.guilt, state.score < 0 && styles.guiltDebt]}>
-        {guiltMsg(state.snoozeCount, state.score, state.name)}
+      <Text style={[styles.guilt, state.balance <= 0 && styles.guiltDebt]}>
+        {guiltMsg(state.snoozeCount, state.balance, state.name)}
       </Text>
       {state.snoozeCount > 0 && (
         <Text style={styles.snoozeCount}>
@@ -266,8 +281,8 @@ export default function AlarmRingScreen() {
       )}
 
       <View style={styles.scoreSection}>
-        <Text style={[styles.score, state.score < 0 && styles.scoreNeg]}>{state.score}</Text>
-        <Text style={styles.scoreLabel}>POINTS REMAINING</Text>
+        <Text style={[styles.score, state.balance <= 0 && styles.scoreNeg]}>{formatUSD(state.balance)}</Text>
+        <Text style={styles.scoreLabel}>BALANCE REMAINING</Text>
       </View>
 
       <View style={styles.buttons}>
@@ -277,7 +292,12 @@ export default function AlarmRingScreen() {
         <Pressable style={styles.snoozeBtn} onPress={handleSnooze}>
           <Text style={styles.snoozeText}>SNOOZE</Text>
           <Text style={styles.snoozeHint}>
-            {state.snoozeCount === 0 ? '5 min · free' : '5 min · −1 point'}
+            {(() => {
+              const today = new Date().toISOString().slice(0, 10);
+              const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
+              const cost = state.tier ? snoozeCostCents(state.tier, dailyCount) : 0;
+              return cost === 0 ? '5 min · FREE' : `5 min · −${formatUSD(cost)}`;
+            })()}
           </Text>
         </Pressable>
       </View>

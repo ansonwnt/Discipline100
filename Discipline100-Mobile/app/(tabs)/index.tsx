@@ -15,7 +15,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { state, dispatch } = useApp();
   const { theme, isDark } = useTheme();
-  const canAdd = state.score > 0 && state.alarms.length < MAX_ALARMS;
+  const canAdd = state.balance > 0 && state.tier != null && state.alarms.length < MAX_ALARMS;
+  const needsDeposit = state.balance <= 0 || !state.tier;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]} edges={['top']}>
@@ -68,13 +69,13 @@ export default function HomeScreen() {
           >
             <Text style={styles.addBtnText}>+ ADD ALARM</Text>
           </Pressable>
-        ) : state.score <= 0 ? (
-          <View style={styles.blocked}>
+        ) : needsDeposit ? (
+          <Pressable style={styles.blocked} onPress={() => router.push('/tier-selection')}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="flash" size={14} color={Colors.red} />
-              <Text style={styles.blockedText}>Out of points! Buy more to set alarms.</Text>
+              <Text style={styles.blockedText}>Out of balance! Make a deposit to set alarms.</Text>
             </View>
-          </View>
+          </Pressable>
         ) : state.alarms.length >= MAX_ALARMS ? (
           <View style={[styles.addBtn, styles.addBtnDisabled]}>
             <Text style={[styles.addBtnText, { opacity: 0.4 }]}>Max {MAX_ALARMS} alarms</Text>

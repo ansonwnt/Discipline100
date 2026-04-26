@@ -126,7 +126,12 @@ export default function SetAlarmScreen() {
   const getTime12 = () => `${hours[hourIdx]}:${minutes[minIdx]} ${periods[perIdx]}`;
 
   const handleSet = () => {
-    if (state.score <= 0 || state.alarms.length >= MAX_ALARMS) {
+    // If no deposit yet, redirect to tier selection
+    if (state.balance <= 0 || !state.tier) {
+      router.push('/tier-selection?from=set-alarm');
+      return;
+    }
+    if (state.alarms.length >= MAX_ALARMS) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }

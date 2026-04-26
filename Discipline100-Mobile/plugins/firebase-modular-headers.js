@@ -14,12 +14,12 @@ module.exports = function withFirebaseModularHeaders(config) {
       // don't include their own module maps.
       // Insert right before the first occurrence of use_react_native
       const modularHeaders = [
-        "  pod 'FirebaseAuth', :modular_headers => true",
         "  pod 'FirebaseAuthInterop', :modular_headers => true",
         "  pod 'FirebaseAppCheckInterop', :modular_headers => true",
         "  pod 'FirebaseMessagingInterop', :modular_headers => true",
         "  pod 'FirebaseFirestoreInternal', :modular_headers => true",
         "  pod 'FirebaseCoreInternal', :modular_headers => true",
+        "  pod 'FirebaseCoreExtension', :modular_headers => true",
         "  pod 'GoogleUtilities', :modular_headers => true",
         "  pod 'RecaptchaInterop', :modular_headers => true",
       ].join('\n');

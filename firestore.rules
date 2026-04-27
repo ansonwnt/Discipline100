@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      // Only the owner can read their own doc
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Client can write only non-financial fields
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && !('balance' in request.resource.data)
+        && !('tier' in request.resource.data)
+        && !('stripeCustomerId' in request.resource.data)
+        && !('depositPaymentIntentId' in request.resource.data);
+
+      // Transactions subcollection: owner read-only, no client writes
+      match /transactions/{txId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+  }
+}

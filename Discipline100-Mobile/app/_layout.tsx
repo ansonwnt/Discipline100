@@ -1,17 +1,34 @@
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState, useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
-import { AppProvider } from '../src/context/AppContext';
+import { AppProvider, useApp } from '../src/context/AppContext';
 import { ThemeProvider } from '../src/context/ThemeContext';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { STRIPE_PUBLISHABLE_KEY } from '../src/constants/stripe';
+import { startAlarmWatcher, stopAlarmWatcher } from '../src/utils/backgroundAlarm';
 
 // Keep the native splash visible while we load
 SplashScreen.preventAutoHideAsync();
+
+// Watches alarm state and manages background audio keepalive + alarm firing
+function AlarmWatcher() {
+  const { state, dispatch } = useApp();
+  const router = useRouter();
+
+  useEffect(() => {
+    startAlarmWatcher(state.alarms, (id) => {
+      dispatch({ type: 'TRIGGER_ALARM', id });
+      router.push(`/alarm-ring?alarmId=${id}`);
+    });
+    return () => { stopAlarmWatcher(); };
+  }, [state.alarms]);
+
+  return null;
+}
 
 function AppContent() {
   const { user } = useAuth();
@@ -24,6 +41,7 @@ function AppContent() {
   return (
     <AppProvider uid={user?.uid}>
       <ThemeProvider>
+        <AlarmWatcher />
         <StatusBar style="dark" />
         <View style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>

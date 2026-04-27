@@ -2,7 +2,7 @@
   "expo": {
     "name": "Discipline100",
     "slug": "discipline100",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -19,7 +19,9 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "infoPlist": {
+        "UIBackgroundModes": ["audio"],
         "NSAlarmKitUsageDescription": "Discipline100 needs alarm access to wake you up at your scheduled time.",
+        "NSCameraUsageDescription": "Required by a third-party SDK. This app does not use the camera.",
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {

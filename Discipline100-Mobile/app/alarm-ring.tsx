@@ -3,12 +3,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { Colors } from '../src/constants/colors';
 import { HOLD_DURATION_MS, SNOOZE_DURATION_MS, snoozeCostCents, formatUSD } from '../src/constants/config';
-import { stopNativeSound, scheduleSnoozeAlarm } from '../src/utils/alarmSync';
+import { scheduleSnoozeAlarm } from '../src/utils/alarmSync';
+import { playAlarmAudio, stopAlarmAudio, startSilentLoop } from '../src/utils/backgroundAlarm';
 import { useApp, fmt12, guiltMsg } from '../src/context/AppContext';
 import { useAuth } from '../src/context/AuthContext';
 import { deductSnoozeBalance } from '../src/utils/firestoreSync';
 import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withRepeat, withTiming,
@@ -36,7 +36,6 @@ export default function AlarmRingScreen() {
   const [holdDone, setHoldDone] = useState(false);
   const holdStart = useRef(0);
   const holdTimer = useRef<NodeJS.Timeout | null>(null);
-  const chimeInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Set activeAlarmId from route param on mount
   useEffect(() => {
@@ -56,9 +55,10 @@ export default function AlarmRingScreen() {
       withSequence(withTiming(20, { duration: 150 }), withTiming(-20, { duration: 150 }), withTiming(0, { duration: 150 })),
       -1
     );
-    playAlarmSound();
+    playAlarmAudio();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     return () => {
-      stopAlarmSound();
+      stopAlarmAudio();
       if (holdTimer.current) clearTimeout(holdTimer.current);
     };
   }, []);
@@ -67,49 +67,25 @@ export default function AlarmRingScreen() {
     transform: [{ rotate: `${ringRotate.value}deg` }],
   }));
 
-  // ===== SOUND =====
-  async function playAlarmSound() {
-    try {
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true });
-      // Use a repeating chime pattern with oscillator-like approach
-      const playChime = async () => {
-        try {
-          // Use a built-in system sound approach or generate tone
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        } catch {}
-      };
-      playChime();
-      chimeInterval.current = setInterval(playChime, 1200);
-    } catch {}
-  }
-
-  function stopAlarmSound() {
-    if (chimeInterval.current) {
-      clearInterval(chimeInterval.current);
-      chimeInterval.current = null;
-    }
-    stopNativeSound();
-  }
+  // Sound is managed by backgroundAlarm.ts (playAlarmAudio / stopAlarmAudio)
 
   // ===== SNOOZE =====
   const handleSnooze = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // Calculate cost before dispatch (dispatch will also calculate, but we need it for server deduction)
     const today = new Date().toISOString().slice(0, 10);
     const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
     const costCents = state.tier ? snoozeCostCents(state.tier, dailyCount) : 0;
     const actualCost = Math.min(costCents, state.balance);
 
     dispatch({ type: 'SNOOZE' });
-    stopAlarmSound();
+    await stopAlarmAudio();
+    startSilentLoop(); // resume keepalive for next alarm check
 
-    // Server-side deduction
     if (user && actualCost > 0) {
       deductSnoozeBalance(user.uid, actualCost);
     }
 
-    // Schedule native snooze alarm
     if (alarm) {
       await scheduleSnoozeAlarm(alarm.id, SNOOZE_DURATION_MS / 60000);
     }
@@ -179,7 +155,7 @@ export default function AlarmRingScreen() {
       setHoldDone(true);
       setHolding(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      stopAlarmSound();
+      stopAlarmAudio();
       setTimeout(() => {
         dispatch({ type: 'DISMISS' });
         router.back();

@@ -11,9 +11,10 @@ export default function WalletScreen() {
   const router = useRouter();
   const { state } = useApp();
   const { theme } = useTheme();
-  const totalSnoozes = state.history.length;
-  const totalSpent = state.history.reduce((a, h) => a + h.cost, 0);
-  const freeOnes = state.history.filter(h => h.cost === 0).length;
+  const snoozeHistory = state.history.filter(h => h.snoozeNum > 0);
+  const totalSnoozes = snoozeHistory.length;
+  const totalSpent = snoozeHistory.reduce((a, h) => a + h.cost, 0);
+  const freeOnes = snoozeHistory.filter(h => h.cost === 0).length;
   const isEmpty = state.balance <= 0;
 
   const tierConfig = state.tier ? TIERS[state.tier] : null;
@@ -82,7 +83,7 @@ export default function WalletScreen() {
             style={[styles.actionBtn, { backgroundColor: Colors.yellow }]}
             onPress={() => router.push('/tier-selection')}
           >
-            <Text style={styles.actionBtnText}>Make a Deposit</Text>
+            <Text style={styles.actionBtnText}>{state.tier && isEmpty ? 'Top Up Balance' : 'Make a Deposit'}</Text>
           </Pressable>
         ) : state.tier !== 'tough_guy' ? (
           <Pressable

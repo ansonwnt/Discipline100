@@ -10,6 +10,11 @@ import { ThemeProvider } from '../src/context/ThemeContext';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { STRIPE_PUBLISHABLE_KEY } from '../src/constants/stripe';
 import { startAlarmWatcher, stopAlarmWatcher } from '../src/utils/backgroundAlarm';
+import * as Notifications from 'expo-notifications';
+import { configureNotificationHandler } from '../src/utils/localNotifications';
+
+// Configure notification appearance before any component mounts
+configureNotificationHandler();
 
 // Keep the native splash visible while we load
 SplashScreen.preventAutoHideAsync();
@@ -26,6 +31,18 @@ function AlarmWatcher() {
     });
     return () => { stopAlarmWatcher(); };
   }, [state.alarms]);
+
+  // Handle notification tap (killed-app fallback: user taps banner to open alarm-ring)
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as { alarmId?: number };
+      if (data?.alarmId) {
+        dispatch({ type: 'TRIGGER_ALARM', id: data.alarmId });
+        router.push(`/alarm-ring?alarmId=${data.alarmId}`);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   return null;
 }

@@ -10,7 +10,7 @@ import { TierKey, formatUSD } from '../constants/config';
 export function usePayment() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const { user } = useAuth();
-  const { dispatch } = useApp();
+  const { state, dispatch } = useApp();
   const [loading, setLoading] = useState(false);
 
   async function initiateDeposit(tier: TierKey): Promise<boolean> {
@@ -44,11 +44,16 @@ export function usePayment() {
         return false;
       }
 
-      // 4. Payment succeeded — wait for webhook to update Firestore
-      // Listen for balance update
+      // 4. Payment succeeded — wait for webhook to update Firestore.
+      // Capture the balance NOW so we only resolve when it actually INCREASES
+      // past the pre-payment value. onSnapshot fires immediately with the current
+      // value, so without this guard an upgrade (where balance > 0 already) would
+      // resolve before the webhook fires.
+      const balanceBeforePayment = state.balance;
+
       return await new Promise<boolean>((resolve) => {
         const unsubscribe = listenToBalance(user.uid, (balance, tierFromServer) => {
-          if (balance > 0 && tierFromServer) {
+          if (balance > balanceBeforePayment && tierFromServer) {
             dispatch({ type: 'SET_BALANCE', balance, tier: tierFromServer as TierKey });
             unsubscribe();
             setLoading(false);

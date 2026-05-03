@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { loadState, saveState } from '../utils/storage';
 import { syncAlarmsToNative } from '../utils/alarmSync';
+import { syncLocalNotifications } from '../utils/localNotifications';
 import { pushToFirestore, pullFromFirestore, createUserDoc } from '../utils/firestoreSync';
 import { MAX_ALARMS, MAX_HISTORY, snoozeCostCents, formatUSD, TierKey } from '../constants/config';
 
@@ -132,13 +133,27 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DISMISS': {
+      // Keep alarm enabled so it fires again tomorrow.
+      // The JS watcher's firedToday set prevents same-day re-firing.
+      const today = todayStr();
+      // If user dismissed without snoozing, record a perfect-day entry so the
+      // streak doesn't break (history is the only source for streak calculation).
+      const newHistory = state.snoozeCount === 0
+        ? [
+            {
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              date: today,
+              snoozeNum: 0, // sentinel: "dismissed with no snooze"
+              cost: 0,
+            },
+            ...state.history,
+          ].slice(0, MAX_HISTORY)
+        : state.history;
       return {
         ...state,
-        alarms: state.alarms.map(a =>
-          a.id === state.activeAlarmId ? { ...a, enabled: false } : a
-        ),
         activeAlarmId: null,
         snoozeCount: 0,
+        history: newHistory,
       };
     }
 
@@ -270,7 +285,7 @@ export function AppProvider({ children, uid }: { children: React.ReactNode; uid?
     load();
   }, [uid]);
 
-  // Save state on every change + sync alarms + push to Firestore
+  // Save state on every change + push to Firestore
   useEffect(() => {
     if (!loaded) return;
 
@@ -284,13 +299,18 @@ export function AppProvider({ children, uid }: { children: React.ReactNode; uid?
       saveState(state);
     }
 
-    syncAlarmsToNative(state.alarms);
-
     // Push to Firestore if signed in
     if (uid) {
       pushToFirestore(uid, state);
     }
   }, [state, loaded, uid]);
+
+  // Sync alarms to native + local notifications only when alarms array changes
+  useEffect(() => {
+    if (!loaded) return;
+    syncAlarmsToNative(state.alarms);
+    syncLocalNotifications(state.alarms);
+  }, [state.alarms, loaded]);
 
   return (
     <AppContext.Provider value={{ state, loaded, dispatch }}>
@@ -315,9 +335,10 @@ export function getGreeting(): string {
   return 'Good evening,';
 }
 
-export function guiltMsg(snoozeCount: number, balance: number, name: string): string {
+export function guiltMsg(snoozeCount: number, balance: number, name: string, lastCost = 0): string {
   if (snoozeCount === 0) return name ? `Rise and shine, ${name}!` : 'Rise and shine, champ!';
   if (balance <= 0) return ['You\'re out of funds!', 'Balance empty... keep going?!', 'This is getting expensive...', 'WAKE UP!'][Math.min(snoozeCount - 1, 3)];
   if (balance < 500) return ['Running low on funds!', 'Your balance is shrinking...', 'Almost out!'][Math.min(snoozeCount - 1, 2)];
+  if (lastCost === 0) return ['Free pass... for now.', 'Enjoy the freebie — next one costs!', 'Still free, but the clock is ticking...'][Math.min(snoozeCount - 1, 2)];
   return ['That cost you real money...', 'Another dollar gone!', 'Your balance is melting...', 'Seriously? Again?!', 'Money doesn\'t grow on trees!'][Math.min(snoozeCount - 1, 4)];
 }

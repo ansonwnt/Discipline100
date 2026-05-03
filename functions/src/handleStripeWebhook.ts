@@ -59,10 +59,25 @@ export const handleStripeWebhook = functions
         txType = 'deposit';
       }
 
+      // For deposits: store as the base PI. For upgrades: store separately so
+      // requestRefund can refund from both PIs without exceeding either charge.
+      const piFields = type === 'upgrade'
+        ? {
+            upgradePaymentIntentId: paymentIntent.id,
+            upgradePaymentIntentAmount: paymentIntent.amount,
+          }
+        : {
+            depositPaymentIntentId: paymentIntent.id,
+            depositPaymentIntentAmount: paymentIntent.amount,
+            // Clear any prior upgrade PI when re-depositing from scratch
+            upgradePaymentIntentId: null,
+            upgradePaymentIntentAmount: null,
+          };
+
       transaction.set(userRef, {
         balance: newBalance,
         tier,
-        depositPaymentIntentId: paymentIntent.id,
+        ...piFields,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 

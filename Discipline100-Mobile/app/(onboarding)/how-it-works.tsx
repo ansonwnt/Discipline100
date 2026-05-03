@@ -7,6 +7,7 @@ const steps = [
   { num: '1', title: 'Set your alarm', desc: 'Pick your wake-up time with the scroll wheel', color: Colors.yellowLight, textColor: Colors.brown },
   { num: '2', title: 'Snooze = lose money', desc: 'First snooze is free. After that, each one costs real money from your deposit', color: Colors.redLight, textColor: Colors.red },
   { num: '3', title: 'Stay disciplined', desc: 'Withdraw your remaining balance anytime. Your deposit is fully refundable', color: Colors.greenLight, textColor: Colors.green },
+  { num: '4', title: 'Keep alarms reliable', desc: 'Allow notifications and don\'t force-quit the app — both are needed for your alarm to fire', color: Colors.yellowLight, textColor: Colors.brown },
 ];
 
 export default function HowItWorks() {

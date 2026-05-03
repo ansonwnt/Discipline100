@@ -177,6 +177,12 @@ export default function SetAlarmScreen() {
         </Animated.View>
         <Text style={styles.tip}>Swipe up & down or scroll</Text>
 
+        {/* Reliability tip */}
+        <View style={styles.reliabilityTip}>
+          <Ionicons name="information-circle-outline" size={14} color={Colors.brown} />
+          <Text style={styles.reliabilityText}>Allow notifications & keep app installed for reliable alarms</Text>
+        </View>
+
         {/* Buttons */}
         <View style={styles.actions}>
           <Pressable style={styles.setBtn} onPress={handleSet}>
@@ -244,6 +250,11 @@ const styles = StyleSheet.create({
   },
   previewText: { fontSize: 16, fontWeight: '700', color: Colors.brown },
   tip: { fontSize: 12, fontWeight: '600', color: Colors.grayDark, marginTop: 8 },
+  reliabilityTip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12,
+    backgroundColor: Colors.yellowLight, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  reliabilityText: { fontSize: 12, fontWeight: '600', color: Colors.brown, flex: 1 },
   actions: { width: '100%', gap: 12, marginTop: 24 },
   setBtn: {
     paddingVertical: 18, backgroundColor: Colors.yellow, borderRadius: 16, alignItems: 'center',

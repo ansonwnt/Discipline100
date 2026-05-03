@@ -48,11 +48,7 @@ export default function TierSelectionScreen() {
   async function handleSelectTier(tier: TierKey) {
     const success = await initiateDeposit(tier);
     if (success) {
-      if (params.from === 'set-alarm') {
-        router.back();
-      } else {
-        router.back();
-      }
+      router.back();
     }
   }
 

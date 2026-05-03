@@ -5,13 +5,15 @@ import { useApp } from '../../src/context/AppContext';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+import { requestNotificationPermission } from '../../src/utils/localNotifications';
 
 export default function WalletReveal() {
   const router = useRouter();
   const { state, dispatch } = useApp();
 
-  const handleGo = () => {
+  const handleGo = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await requestNotificationPermission(); // triggers iOS permission prompt
     dispatch({ type: 'FINISH_ONBOARDING' });
     router.replace('/(tabs)');
   };

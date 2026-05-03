@@ -50,8 +50,9 @@ export default function HistoryScreen() {
 
   const groups: DayGroup[] = dateOrder.map(date => {
     const entries = groupMap[date];
-    const totalCost = entries.reduce((a, e) => a + e.cost, 0);
-    return { date, entries, totalCost, perf: perfClass(entries.length) };
+    const snoozeEntries = entries.filter(e => e.snoozeNum > 0); // exclude perfect-day sentinels
+    const totalCost = snoozeEntries.reduce((a, e) => a + e.cost, 0);
+    return { date, entries: snoozeEntries, totalCost, perf: perfClass(snoozeEntries.length) };
   });
 
   // First group open by default
@@ -89,7 +90,9 @@ export default function HistoryScreen() {
                       <View>
                         <Text style={styles.dayLabel}>{formatDateLabel(group.date)}</Text>
                         <Text style={styles.daySummary}>
-                          {group.entries.length} snooze{group.entries.length > 1 ? 's' : ''} · {group.totalCost > 0 ? `−${formatUSD(group.totalCost)}` : 'no cost'}
+                          {group.entries.length === 0
+                            ? 'Perfect wake-up!'
+                            : `${group.entries.length} snooze${group.entries.length > 1 ? 's' : ''} · ${group.totalCost > 0 ? `−${formatUSD(group.totalCost)}` : 'no cost'}`}
                         </Text>
                       </View>
                     </View>
@@ -103,7 +106,13 @@ export default function HistoryScreen() {
                     </View>
                   </Pressable>
 
-                  {isOpen && (
+                  {isOpen && group.entries.length === 0 && (
+                    <View style={[styles.entries, styles.perfectRow]}>
+                      <Ionicons name="sunny" size={16} color={Colors.brown} />
+                      <Text style={styles.perfectText}>Up on the first ring!</Text>
+                    </View>
+                  )}
+                  {isOpen && group.entries.length > 0 && (
                     <View style={styles.entries}>
                       {group.entries.map((e, i) => (
                         <View key={i} style={[styles.entry, i < group.entries.length - 1 && styles.entryBorder]}>
@@ -150,6 +159,8 @@ const styles = StyleSheet.create({
   chevron: { fontSize: 12, color: Colors.grayDark },
   chevronOpen: { transform: [{ rotate: '180deg' }] },
   entries: { borderTopWidth: 1, borderTopColor: Colors.gray },
+  perfectRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, paddingLeft: 40 },
+  perfectText: { fontSize: 13, fontWeight: '700', color: Colors.brown },
   entry: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 16, paddingLeft: 40 },
   entryBorder: { borderBottomWidth: 1, borderBottomColor: Colors.gray },
   entryLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },

@@ -4,12 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/colors';
 import { MAX_ALARMS } from '../../src/constants/config';
 import { useApp, getGreeting } from '../../src/context/AppContext';
+import { hasNotificationPermission } from '../../src/utils/localNotifications';
 import { StreakCard } from '../../src/components/StreakCard';
 import { AlarmCard } from '../../src/components/AlarmCard';
 import { CalendarGrid } from '../../src/components/CalendarGrid';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useState, useEffect } from 'react';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -17,6 +19,14 @@ export default function HomeScreen() {
   const { theme, isDark } = useTheme();
   const canAdd = state.balance > 0 && state.tier != null && state.alarms.length < MAX_ALARMS;
   const needsDeposit = state.balance <= 0 || !state.tier;
+  const hasActiveAlarms = state.alarms.some(a => a.enabled);
+  const [notifGranted, setNotifGranted] = useState(true);
+
+  useEffect(() => {
+    if (hasActiveAlarms) {
+      hasNotificationPermission().then(setNotifGranted);
+    }
+  }, [hasActiveAlarms]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]} edges={['top']}>
@@ -82,6 +92,22 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
+        {/* Reliability warning — shown when alarms are active */}
+        {hasActiveAlarms && (
+          <View style={styles.reliabilityBanner}>
+            <Ionicons
+              name={notifGranted ? 'information-circle-outline' : 'warning-outline'}
+              size={14}
+              color={notifGranted ? Colors.brown : Colors.red}
+            />
+            <Text style={[styles.reliabilityText, !notifGranted && { color: Colors.red }]}>
+              {notifGranted
+                ? 'Keep app installed & don\'t force-quit for reliable alarms'
+                : 'Allow notifications in Settings for alarms to fire when app is closed'}
+            </Text>
+          </View>
+        )}
+
         {/* Calendar */}
         <CalendarGrid />
 
@@ -126,6 +152,14 @@ const styles = StyleSheet.create({
   },
   addBtnDisabled: { opacity: 0.4, backgroundColor: Colors.grayMid, shadowOpacity: 0 },
   addBtnText: { fontSize: 14, fontWeight: '800', color: Colors.black, letterSpacing: 0.5 },
+  reliabilityBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12,
+    backgroundColor: Colors.yellowLight, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
+  },
+  reliabilityText: {
+    fontSize: 12, fontWeight: '600', color: Colors.brown, flex: 1, lineHeight: 17,
+  },
   blocked: {
     marginTop: 10, padding: 14, backgroundColor: Colors.redLight,
     borderWidth: 2, borderColor: 'rgba(229,57,53,0.2)', borderRadius: 16,

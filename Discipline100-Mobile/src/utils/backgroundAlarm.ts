@@ -24,6 +24,13 @@ let onFireCallback: ((id: number) => void) | null = null;
 // Track which alarms already fired today to avoid double-firing
 const firedToday: Map<string, Set<number>> = new Map(); // "YYYY-MM-DD" -> Set<alarmId>
 
+// JS-side snooze tracking (used on iOS < 26 where AlarmKit is unavailable)
+let pendingSnooze: { id: number; at: number } | null = null;
+
+export function scheduleJsSnooze(alarmId: number, minutes: number): void {
+  pendingSnooze = { id: alarmId, at: Date.now() + minutes * 60 * 1000 };
+}
+
 // ─── Audio session ────────────────────────────────────────────────────────────
 
 async function setAudioMode(playing: boolean) {
@@ -122,6 +129,14 @@ export function stopAlarmWatcher(): void {
 }
 
 function checkAlarms(alarms: AlarmEntry[]): void {
+  // Check JS-side snooze first (fires on current iOS where AlarmKit is unavailable)
+  if (pendingSnooze && Date.now() >= pendingSnooze.at) {
+    const { id } = pendingSnooze;
+    pendingSnooze = null;
+    onFireCallback?.(id);
+    return;
+  }
+
   const now = new Date();
   const h = now.getHours();
   const m = now.getMinutes();

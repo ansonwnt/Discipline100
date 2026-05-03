@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Colors } from '../src/constants/colors';
 import { HOLD_DURATION_MS, SNOOZE_DURATION_MS, snoozeCostCents, formatUSD } from '../src/constants/config';
 import { scheduleSnoozeAlarm } from '../src/utils/alarmSync';
-import { playAlarmAudio, stopAlarmAudio, startSilentLoop } from '../src/utils/backgroundAlarm';
+import { playAlarmAudio, stopAlarmAudio, startSilentLoop, scheduleJsSnooze } from '../src/utils/backgroundAlarm';
 import { useApp, fmt12, guiltMsg } from '../src/context/AppContext';
 import { useAuth } from '../src/context/AuthContext';
 import { deductSnoozeBalance } from '../src/utils/firestoreSync';
@@ -34,15 +34,9 @@ export default function AlarmRingScreen() {
   const [mathError, setMathError] = useState('');
   const [, setHolding] = useState(false);
   const [holdDone, setHoldDone] = useState(false);
-  const holdStart = useRef(0);
   const holdTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // Set activeAlarmId from route param on mount
-  useEffect(() => {
-    if (alarmId) {
-      dispatch({ type: 'TRIGGER_ALARM', id: parseInt(alarmId) });
-    }
-  }, [alarmId]);
+  // activeAlarmId is already set by AlarmWatcher before navigating here
 
   // Use activeAlarmId from state, fall back to route param for first render
   const targetId = state.activeAlarmId ?? (alarmId ? parseInt(alarmId) : null);
@@ -87,7 +81,9 @@ export default function AlarmRingScreen() {
     }
 
     if (alarm) {
-      await scheduleSnoozeAlarm(alarm.id, SNOOZE_DURATION_MS / 60000);
+      const snoozeMinutes = SNOOZE_DURATION_MS / 60000;
+      scheduleJsSnooze(alarm.id, snoozeMinutes); // JS watcher re-fires (works on all iOS)
+      await scheduleSnoozeAlarm(alarm.id, snoozeMinutes); // native fallback (iOS 26+ / Android)
     }
 
     router.back();
@@ -147,8 +143,9 @@ export default function AlarmRingScreen() {
 
   // ===== HOLD TO CONFIRM =====
   const startHold = () => {
+    if (holdDone) return;
+    if (holdTimer.current) clearTimeout(holdTimer.current); // cancel any prior incomplete hold
     setHolding(true);
-    holdStart.current = Date.now();
     holdProgress.value = withTiming(0, { duration: HOLD_DURATION_MS });
 
     holdTimer.current = setTimeout(() => {
@@ -248,7 +245,12 @@ export default function AlarmRingScreen() {
       <Text style={styles.alarmLabel}>WAKE UP!</Text>
 
       <Text style={[styles.guilt, state.balance <= 0 && styles.guiltDebt]}>
-        {guiltMsg(state.snoozeCount, state.balance, state.name)}
+        {(() => {
+          const today = new Date().toISOString().slice(0, 10);
+          const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
+          const lastCost = state.snoozeCount > 0 && state.tier && dailyCount > 0 ? snoozeCostCents(state.tier, dailyCount - 1) : 0;
+          return guiltMsg(state.snoozeCount, state.balance, state.name, lastCost);
+        })()}
       </Text>
       {state.snoozeCount > 0 && (
         <Text style={styles.snoozeCount}>

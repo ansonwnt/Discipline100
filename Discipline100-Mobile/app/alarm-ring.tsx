@@ -67,9 +67,7 @@ export default function AlarmRingScreen() {
   const handleSnooze = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    const today = new Date().toISOString().slice(0, 10);
-    const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
-    const costCents = state.tier ? snoozeCostCents(state.tier, dailyCount) : 0;
+    const costCents = state.tier ? snoozeCostCents(state.tier, state.snoozeCount) : 0;
     const actualCost = Math.min(costCents, state.balance);
 
     dispatch({ type: 'SNOOZE' });
@@ -246,9 +244,7 @@ export default function AlarmRingScreen() {
 
       <Text style={[styles.guilt, state.balance <= 0 && styles.guiltDebt]}>
         {(() => {
-          const today = new Date().toISOString().slice(0, 10);
-          const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
-          const lastCost = state.snoozeCount > 0 && state.tier && dailyCount > 0 ? snoozeCostCents(state.tier, dailyCount - 1) : 0;
+          const lastCost = state.snoozeCount > 0 && state.tier ? snoozeCostCents(state.tier, state.snoozeCount - 1) : 0;
           return guiltMsg(state.snoozeCount, state.balance, state.name, lastCost);
         })()}
       </Text>
@@ -271,9 +267,7 @@ export default function AlarmRingScreen() {
           <Text style={styles.snoozeText}>SNOOZE</Text>
           <Text style={styles.snoozeHint}>
             {(() => {
-              const today = new Date().toISOString().slice(0, 10);
-              const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
-              const cost = state.tier ? snoozeCostCents(state.tier, dailyCount) : 0;
+              const cost = state.tier ? snoozeCostCents(state.tier, state.snoozeCount) : 0;
               return cost === 0 ? '5 min · FREE' : `5 min · −${formatUSD(cost)}`;
             })()}
           </Text>

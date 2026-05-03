@@ -45,16 +45,16 @@ export default function WalletReveal() {
           </View>
           <View style={styles.infoCard}>
             <Ionicons name="notifications-outline" size={20} color={Colors.yellow} />
-            <Text style={styles.infoText}>Allow notifications for reliable alarms</Text>
+            <Text style={styles.infoText}>Notifications let alarms ring when the app is closed</Text>
           </View>
         </Animated.View>
 
         <Text style={styles.note}>
-          Don't force-quit the app after setting alarms.
+          For best reliability, don't force-quit the app after setting alarms.
         </Text>
 
         <Pressable style={styles.btn} onPress={handleGo}>
-          <Text style={styles.btnText}>LET'S GO!</Text>
+          <Text style={styles.btnText}>ENABLE NOTIFICATIONS</Text>
         </Pressable>
 
         <View style={styles.dots}>

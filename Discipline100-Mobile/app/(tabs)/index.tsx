@@ -1,10 +1,10 @@
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../src/constants/colors';
 import { MAX_ALARMS } from '../../src/constants/config';
 import { useApp, getGreeting } from '../../src/context/AppContext';
-import { hasNotificationPermission } from '../../src/utils/localNotifications';
+import { hasNotificationPermission, requestNotificationPermission } from '../../src/utils/localNotifications';
 import { StreakCard } from '../../src/components/StreakCard';
 import { AlarmCard } from '../../src/components/AlarmCard';
 import { CalendarGrid } from '../../src/components/CalendarGrid';
@@ -27,6 +27,15 @@ export default function HomeScreen() {
       hasNotificationPermission().then(setNotifGranted);
     }
   }, [hasActiveAlarms]);
+
+  const handleEnableNotifications = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const granted = await requestNotificationPermission();
+    setNotifGranted(granted);
+    if (!granted) {
+      Linking.openSettings();
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]} edges={['top']}>
@@ -114,19 +123,16 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {/* Reliability warning — shown when alarms are active */}
-        {hasActiveAlarms && (
+        {/* Reliability warning — shown only when active alarms need permission */}
+        {hasActiveAlarms && !notifGranted && (
           <View style={styles.reliabilityBanner}>
-            <Ionicons
-              name={notifGranted ? 'information-circle-outline' : 'warning-outline'}
-              size={14}
-              color={notifGranted ? Colors.brown : Colors.red}
-            />
-            <Text style={[styles.reliabilityText, !notifGranted && { color: Colors.red }]}>
-              {notifGranted
-                ? 'Keep app installed & don\'t force-quit for reliable alarms'
-                : 'Allow notifications in Settings for alarms to fire when app is closed'}
+            <Ionicons name="warning-outline" size={16} color={Colors.red} />
+            <Text style={styles.reliabilityText}>
+              Notifications are off. Your alarm may not ring when the app is closed.
             </Text>
+            <Pressable style={styles.reliabilityBtn} onPress={handleEnableNotifications}>
+              <Text style={styles.reliabilityBtnText}>Enable</Text>
+            </Pressable>
           </View>
         )}
 
@@ -227,12 +233,23 @@ const styles = StyleSheet.create({
   addBtnDisabled: { opacity: 0.4, backgroundColor: Colors.grayMid, shadowOpacity: 0 },
   addBtnText: { fontSize: 14, fontWeight: '800', color: Colors.black, letterSpacing: 0.5 },
   reliabilityBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12,
-    backgroundColor: Colors.yellowLight, borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
+    backgroundColor: Colors.redLight, borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 10,
   },
   reliabilityText: {
-    fontSize: 12, fontWeight: '600', color: Colors.brown, flex: 1, lineHeight: 17,
+    fontSize: 12, fontWeight: '700', color: Colors.red, flex: 1, lineHeight: 17,
+  },
+  reliabilityBtn: {
+    backgroundColor: Colors.red,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  reliabilityBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: Colors.white,
   },
   blocked: {
     marginTop: 10, padding: 14, backgroundColor: Colors.redLight,

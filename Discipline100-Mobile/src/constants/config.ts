@@ -31,11 +31,11 @@ function pow2Dollars(n: number): number {
 
 /**
  * Returns snooze cost in CENTS.
- * dailySnoozeIndex is 0-based (0 = first snooze = FREE).
+ * snoozeIndex is 0-based within the current alarm session (0 = first snooze = FREE).
  */
-export function snoozeCostCents(tier: TierKey, dailySnoozeIndex: number): number {
-  if (dailySnoozeIndex === 0) return 0; // First snooze is free
-  const paidIndex = dailySnoozeIndex; // 1-based paid snooze number
+export function snoozeCostCents(tier: TierKey, snoozeIndex: number): number {
+  if (snoozeIndex === 0) return 0; // First snooze is free
+  const paidIndex = snoozeIndex; // 1-based paid snooze number
 
   switch (tier) {
     case 'weak_mind':

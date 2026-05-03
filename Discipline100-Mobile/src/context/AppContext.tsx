@@ -106,11 +106,8 @@ function reducer(state: AppState, action: Action): AppState {
 
       const now = new Date();
       const today = todayStr();
-
-      // Reset daily count if it's a new day
       const dailyCount = state.dailySnoozeDate !== today ? 0 : state.dailySnoozeCount;
-
-      const costCents = snoozeCostCents(state.tier, dailyCount);
+      const costCents = snoozeCostCents(state.tier, state.snoozeCount);
       // Charge what's left if balance < cost
       const actualCost = Math.min(costCents, state.balance);
 

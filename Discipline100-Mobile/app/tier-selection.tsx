@@ -24,7 +24,7 @@ const TIER_LIST: TierInfo[] = [
   {
     key: 'weak_mind',
     color: Colors.brown,
-    description: 'Flat $1 per snooze',
+    description: '$1 per paid snooze',
     costInfo: 'Free, $1, $1, $1...',
     costSequence: [0, 100, 100, 100, 100, 100, 100, 100],
     howItWorks: 'First snooze for each alarm is free. After that, every snooze costs $1.',
@@ -32,7 +32,7 @@ const TIER_LIST: TierInfo[] = [
   {
     key: 'discipline_guy',
     color: Colors.yellow,
-    description: 'Fibonacci sequence',
+    description: '$1, $2, $3, $5...',
     costInfo: 'Free, $1, $2, $3, $5, $8...',
     costSequence: [0, 100, 200, 300, 500, 800, 1300, 2100],
     howItWorks: 'First snooze for each alarm is free. After that, costs follow Fibonacci: $1, $2, $3, $5...',
@@ -40,7 +40,7 @@ const TIER_LIST: TierInfo[] = [
   {
     key: 'tough_guy',
     color: Colors.red,
-    description: 'Powers of 2',
+    description: '$1, $2, $4, $8...',
     costInfo: 'Free, $1, $2, $4, $8, $16...',
     costSequence: [0, 100, 200, 400, 800, 1600, 3200, 6400],
     howItWorks: 'First snooze for each alarm is free. After that, costs double: $1, $2, $4, $8...',
@@ -289,7 +289,6 @@ export default function TierSelectionScreen() {
                   </Pressable>
                 </View>
                 <Text style={[styles.cardDesc, { color: theme.textSecondary }]}>{tier.description}</Text>
-                <Text style={[styles.cardCost, { color: theme.textSecondary }]}>{tier.costInfo}</Text>
               </View>
               <View style={styles.cardRight}>
                 <Text style={[styles.cardAmount, { color: theme.text }]}>{displayAmount}</Text>
@@ -428,7 +427,6 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardLabel: { fontSize: 16, fontWeight: '800' },
   cardDesc: { fontSize: 12, fontWeight: '700', marginTop: 4 },
-  cardCost: { fontSize: 11, fontWeight: '600', marginTop: 3 },
   tipBtn: {
     width: 18,
     height: 18,

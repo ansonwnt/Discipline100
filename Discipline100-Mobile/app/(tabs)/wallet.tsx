@@ -27,9 +27,6 @@ export default function WalletScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Wallet</Text>
-          <Pressable onPress={() => router.push('/settings')} style={styles.gearBtn}>
-            <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
-          </Pressable>
         </View>
 
         {/* Balance Card */}
@@ -49,6 +46,9 @@ export default function WalletScreen() {
           <View style={styles.balanceRow}>
             <Text style={[styles.balance, isEmpty && styles.balanceEmpty]}>{formatUSD(state.balance)}</Text>
           </View>
+          {!isEmpty && (
+            <Text style={styles.refundableNote}>Fully refundable deposit · Yours to withdraw anytime</Text>
+          )}
           {tierConfig && (
             <>
               <View style={styles.progressBar}>
@@ -108,7 +108,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: { fontSize: 20, fontWeight: '900', color: Colors.black },
-  gearBtn: { padding: 8 },
   wallet: {
     borderRadius: 24, padding: 28, overflow: 'hidden',
     backgroundColor: Colors.yellow,
@@ -132,6 +131,7 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: '100%', backgroundColor: 'rgba(26,26,26,0.25)', borderRadius: 3 },
   progressLow: { backgroundColor: Colors.red },
+  refundableNote: { fontSize: 11, fontWeight: '600', color: 'rgba(139,69,19,0.55)', marginTop: 6 },
   subtitle: { fontSize: 13, fontWeight: '700', color: 'rgba(139,69,19,0.6)', marginTop: 10 },
   stats: { flexDirection: 'row', gap: 12, marginTop: 24 },
   stat: {

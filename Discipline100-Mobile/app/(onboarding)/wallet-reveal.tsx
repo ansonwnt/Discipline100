@@ -44,13 +44,13 @@ export default function WalletReveal() {
             <Text style={styles.infoText}>Every snooze costs real money</Text>
           </View>
           <View style={styles.infoCard}>
-            <Ionicons name="wallet-outline" size={20} color={Colors.yellow} />
-            <Text style={styles.infoText}>Withdraw your balance anytime</Text>
+            <Ionicons name="notifications-outline" size={20} color={Colors.yellow} />
+            <Text style={styles.infoText}>Allow notifications for reliable alarms</Text>
           </View>
         </Animated.View>
 
         <Text style={styles.note}>
-          You'll choose your deposit tier when you set your first alarm.
+          Don't force-quit the app after setting alarms.
         </Text>
 
         <Pressable style={styles.btn} onPress={handleGo}>

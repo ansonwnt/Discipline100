@@ -37,6 +37,9 @@ export default function HomeScreen() {
             <View style={styles.logoIcon}><Ionicons name="flash" size={14} color={Colors.white} /></View>
             <Text style={[styles.logoText, { color: theme.text }]}>Discipline<Text style={styles.logoAccent}>100</Text></Text>
           </View>
+          <Pressable onPress={() => router.push('/settings')} style={styles.settingsBtn}>
+            <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
+          </Pressable>
         </View>
 
         {/* Greeting */}
@@ -54,7 +57,26 @@ export default function HomeScreen() {
           <Text style={styles.sectionLabel}>{state.alarms.length}/{MAX_ALARMS}</Text>
         </View>
 
-        {state.alarms.length === 0 ? (
+        {state.alarms.length === 0 && needsDeposit ? (
+          <View style={[styles.startCard, { backgroundColor: theme.cardBg, borderColor: theme.cardBorder }]}>
+            <View style={styles.startIcon}>
+              <Ionicons name="shield-checkmark-outline" size={26} color={Colors.green} />
+            </View>
+            <Text style={[styles.startTitle, { color: theme.text }]}>Start With A Refundable Deposit</Text>
+            <Text style={[styles.startBody, { color: theme.textSecondary }]}>
+              Choose your tier, then set your first alarm.
+            </Text>
+            <Pressable
+              style={styles.startBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/tier-selection');
+              }}
+            >
+              <Text style={styles.startBtnText}>CHOOSE TIER</Text>
+            </Pressable>
+          </View>
+        ) : state.alarms.length === 0 ? (
           <Text style={styles.emptyText}>No alarms set</Text>
         ) : (
           <View style={styles.alarmList}>
@@ -79,7 +101,7 @@ export default function HomeScreen() {
           >
             <Text style={styles.addBtnText}>+ ADD ALARM</Text>
           </Pressable>
-        ) : needsDeposit ? (
+        ) : needsDeposit && state.alarms.length > 0 ? (
           <Pressable style={styles.blocked} onPress={() => router.push('/tier-selection')}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Ionicons name="flash" size={14} color={Colors.red} />
@@ -121,7 +143,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.white },
   scroll: { flex: 1 },
   content: { padding: 24, paddingBottom: 100 },
-  header: { marginBottom: 4 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logoIcon: {
     width: 26, height: 26, backgroundColor: Colors.yellow, borderRadius: 8,
@@ -132,6 +159,7 @@ const styles = StyleSheet.create({
   logoIconText: { fontSize: 14 },
   logoText: { fontSize: 18, fontWeight: '900', color: Colors.black },
   logoAccent: { color: Colors.yellow },
+  settingsBtn: { padding: 8 },
   greeting: { paddingVertical: 16 },
   greetText: { fontSize: 15, fontWeight: '700', color: Colors.grayDark },
   greetName: { fontSize: 24, fontWeight: '900', color: Colors.black },
@@ -144,6 +172,52 @@ const styles = StyleSheet.create({
   },
   alarmList: { gap: 10 },
   emptyText: { textAlign: 'center', padding: 24, color: Colors.grayDark, fontWeight: '600' },
+  startCard: {
+    alignItems: 'center',
+    borderWidth: 2,
+    borderRadius: 20,
+    padding: 22,
+  },
+  startIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  startTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  startBody: {
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  startBtn: {
+    width: '100%',
+    backgroundColor: Colors.yellow,
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    shadowColor: Colors.yellow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  startBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.black,
+    letterSpacing: 0.5,
+  },
   addBtn: {
     marginTop: 10, padding: 16, borderRadius: 16, alignItems: 'center',
     backgroundColor: Colors.yellow,

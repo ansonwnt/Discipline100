@@ -47,6 +47,7 @@ function AlarmWatcher() {
   return null;
 }
 
+
 function AppContent() {
   const { user } = useAuth();
   const [showSplash, setShowSplash] = useState(true);

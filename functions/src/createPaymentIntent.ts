@@ -5,63 +5,77 @@ import { isValidTier, getTierAmount, getUpgradeCost, TierKey } from './config';
 
 const db = admin.firestore();
 
-interface CreatePaymentRequest {
-  tier: string;
-}
-
 export const createPaymentIntent = functions
   .runWith({ secrets: ['STRIPE_SECRET_KEY'] })
-  .https.onCall(async (request) => {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
-  const uid = request.auth?.uid;
-  if (!uid) throw new functions.https.HttpsError('unauthenticated', 'Must be signed in');
+  .https.onRequest(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: { message: 'Must be signed in', status: 'UNAUTHENTICATED' } });
+    return;
+  }
 
-  const { tier } = request.data as CreatePaymentRequest;
-  if (!isValidTier(tier)) throw new functions.https.HttpsError('invalid-argument', 'Invalid tier');
+  let uid: string;
+  try {
+    const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    uid = decoded.uid;
+  } catch {
+    res.status(401).json({ error: { message: 'Invalid auth token', status: 'UNAUTHENTICATED' } });
+    return;
+  }
 
-  const userRef = db.collection('users').doc(uid);
-  const userDoc = await userRef.get();
-  const userData = userDoc.data();
+  const { tier } = (req.body?.data || {}) as { tier: string };
+  if (!isValidTier(tier)) {
+    res.status(400).json({ error: { message: 'Invalid tier', status: 'INVALID_ARGUMENT' } });
+    return;
+  }
 
-  // Determine amount: full deposit or upgrade difference
-  let amount: number;
-  const currentTier = userData?.tier as TierKey | null;
+  try {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
 
-  if (currentTier && userData?.balance > 0) {
-    // Upgrading — charge the difference
-    if (getTierAmount(tier) <= getTierAmount(currentTier)) {
-      throw new functions.https.HttpsError('invalid-argument', 'Can only upgrade to a higher tier');
+    let amount: number;
+    const currentTier = userData?.tier as TierKey | null;
+
+    if (currentTier && userData?.balance > 0) {
+      if (getTierAmount(tier) <= getTierAmount(currentTier)) {
+        res.status(400).json({ error: { message: 'Can only upgrade to a higher tier', status: 'INVALID_ARGUMENT' } });
+        return;
+      }
+      amount = getUpgradeCost(currentTier, tier);
+    } else {
+      amount = getTierAmount(tier);
     }
-    amount = getUpgradeCost(currentTier, tier);
-  } else {
-    // Fresh deposit
-    amount = getTierAmount(tier);
-  }
 
-  // Get or create Stripe customer
-  let stripeCustomerId = userData?.stripeCustomerId;
-  if (!stripeCustomerId) {
-    const customer = await stripe.customers.create({
-      metadata: { firebaseUid: uid },
+    let stripeCustomerId = userData?.stripeCustomerId;
+    if (stripeCustomerId) {
+      // Verify the customer exists in the current Stripe mode (test vs live keys may differ)
+      try {
+        await stripe.customers.retrieve(stripeCustomerId);
+      } catch {
+        stripeCustomerId = null;
+      }
+    }
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({ metadata: { firebaseUid: uid } });
+      stripeCustomerId = customer.id;
+      await userRef.set({ stripeCustomerId }, { merge: true });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'usd',
+      customer: stripeCustomerId,
+      metadata: {
+        firebaseUid: uid,
+        tier,
+        type: currentTier && userData?.balance > 0 ? 'upgrade' : 'deposit',
+      },
     });
-    stripeCustomerId = customer.id;
-    await userRef.set({ stripeCustomerId }, { merge: true });
+
+    res.json({ result: { clientSecret: paymentIntent.client_secret, paymentIntentId: paymentIntent.id } });
+  } catch (e: any) {
+    res.status(500).json({ error: { message: e.message || 'Internal error', status: 'INTERNAL' } });
   }
-
-  // Create PaymentIntent
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount,
-    currency: 'usd',
-    customer: stripeCustomerId,
-    metadata: {
-      firebaseUid: uid,
-      tier,
-      type: currentTier && userData?.balance > 0 ? 'upgrade' : 'deposit',
-    },
-  });
-
-  return {
-    clientSecret: paymentIntent.client_secret,
-    paymentIntentId: paymentIntent.id,
-  };
 });

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { createPaymentIntent, requestRefund } from '../utils/cloudFunctions';
 import { listenToBalance } from '../utils/firestoreSync';
-import { TierKey, formatUSD } from '../constants/config';
+import { TIERS, TierKey, formatUSD } from '../constants/config';
 
 export function usePayment() {
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
@@ -22,9 +22,14 @@ export function usePayment() {
       const { clientSecret } = await createPaymentIntent(tier);
 
       // 2. Initialize Stripe Payment Sheet
+      const isUpgrade = state.tier && state.balance > 0;
+      const depositAmount = isUpgrade
+        ? TIERS[tier].amount - TIERS[state.tier!].amount
+        : TIERS[tier].amount;
       const { error: initError } = await initPaymentSheet({
         paymentIntentClientSecret: clientSecret,
         merchantDisplayName: 'Discipline100',
+        primaryButtonLabel: `Deposit ${formatUSD(depositAmount)} (Refundable)`,
       });
 
       if (initError) {

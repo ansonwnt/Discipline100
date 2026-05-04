@@ -58,8 +58,9 @@ export function CalendarGrid() {
       ]}>
         <Text style={[
           styles.dayText,
+          { color: theme.textSecondary },
           perfStyle && { color: perfStyle.text, fontWeight: '900' },
-          isToday && !perfStyle && styles.dayTodayText,
+          isToday && !perfStyle && { color: theme.text, fontWeight: '900' },
         ]}>{d}</Text>
       </View>
     );
@@ -134,7 +135,6 @@ const styles = StyleSheet.create({
   },
   dayText: { fontSize: 13, fontWeight: '700', color: Colors.grayDark },
   dayToday: { borderWidth: 2, borderColor: Colors.grayMid },
-  dayTodayText: { color: Colors.black, fontWeight: '900' },
   legend: {
     flexDirection: 'row', justifyContent: 'center', gap: 16,
     marginTop: 14, flexWrap: 'wrap',

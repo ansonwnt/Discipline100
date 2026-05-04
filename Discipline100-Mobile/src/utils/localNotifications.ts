@@ -48,7 +48,7 @@ async function scheduleAlarmNotification(alarm: Alarm): Promise<void> {
     content: {
       title: 'Discipline100 — Wake Up!',
       body: 'Your alarm is ringing. Open the app to dismiss.',
-      sound: true,
+      sound: 'alarm.wav',
       data: { alarmId: alarm.id },
     },
     trigger: {
@@ -69,7 +69,7 @@ export async function scheduleSnoozeNotification(alarmId: number, minutes: numbe
       content: {
         title: 'Snooze Over — Wake Up!',
         body: 'Your Discipline100 alarm is ringing.',
-        sound: true,
+        sound: 'alarm.wav',
         data: { alarmId },
       },
       trigger: {

@@ -20,6 +20,7 @@ let silentSound: Audio.Sound | null = null;
 let alarmSound: Audio.Sound | null = null;
 let checkInterval: ReturnType<typeof setInterval> | null = null;
 let onFireCallback: ((id: number) => void) | null = null;
+let stopRequested = false;
 
 // Track which alarms already fired today to avoid double-firing
 const firedToday: Map<string, Set<number>> = new Map(); // "YYYY-MM-DD" -> Set<alarmId>
@@ -29,6 +30,14 @@ let pendingSnooze: { id: number; at: number } | null = null;
 
 export function scheduleJsSnooze(alarmId: number, minutes: number): void {
   pendingSnooze = { id: alarmId, at: Date.now() + minutes * 60 * 1000 };
+}
+
+export function cancelJsSnooze(): void {
+  pendingSnooze = null;
+}
+
+export function isAlarmSoundPlaying(): boolean {
+  return alarmSound !== null;
 }
 
 // ─── Audio session ────────────────────────────────────────────────────────────
@@ -69,14 +78,20 @@ export async function stopSilentLoop(): Promise<void> {
 // ─── Alarm sound ──────────────────────────────────────────────────────────────
 
 export async function playAlarmAudio(): Promise<void> {
-  await stopAlarmAudio();
+  await stopAlarmAudio(); // stop any currently playing sound first
+  stopRequested = false;  // reset flag AFTER the stop (stopAlarmAudio sets it true)
   try {
-    // Switch to playback mode so alarm rings even on silent switch
     await setAudioMode(true);
     const { sound } = await Audio.Sound.createAsync(
       require('../../assets/alarm.wav'),
       { isLooping: true, volume: 1.0, shouldPlay: true }
     );
+    // If stopAlarmAudio() was called while we were loading, unload immediately
+    if (stopRequested) {
+      try { await sound.stopAsync(); await sound.unloadAsync(); } catch {}
+      try { await setAudioMode(false); } catch {}
+      return;
+    }
     alarmSound = sound;
   } catch (e) {
     console.warn('backgroundAlarm: alarm sound failed', e);
@@ -84,13 +99,13 @@ export async function playAlarmAudio(): Promise<void> {
 }
 
 export async function stopAlarmAudio(): Promise<void> {
+  stopRequested = true;
   if (!alarmSound) return;
   try {
     await alarmSound.stopAsync();
     await alarmSound.unloadAsync();
   } catch {}
   alarmSound = null;
-  // Revert to ambient mode after alarm stops
   try {
     await setAudioMode(false);
   } catch {}
@@ -140,7 +155,7 @@ function checkAlarms(alarms: AlarmEntry[]): void {
   const now = new Date();
   const h = now.getHours();
   const m = now.getMinutes();
-  const today = now.toISOString().slice(0, 10);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
   // Clean up old dates
   if (!firedToday.has(today)) {

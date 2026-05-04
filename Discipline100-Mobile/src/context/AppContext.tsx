@@ -130,8 +130,6 @@ function reducer(state: AppState, action: Action): AppState {
     }
 
     case 'DISMISS': {
-      // Keep alarm enabled so it fires again tomorrow.
-      // The JS watcher's firedToday set prevents same-day re-firing.
       const today = todayStr();
       // If user dismissed without snoozing, record a perfect-day entry so the
       // streak doesn't break (history is the only source for streak calculation).

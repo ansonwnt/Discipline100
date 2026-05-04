@@ -55,6 +55,12 @@ export async function scheduleSnoozeAlarm(alarmId: number, minutes: number): Pro
   try {
     const { AlarmService } = require('../../modules/alarm-service/src');
     const snoozeTime = new Date(Date.now() + minutes * 60 * 1000);
+    // Round up to next minute so native alarm never fires before snooze ends.
+    // (AlarmService only supports hour/minute precision.)
+    if (snoozeTime.getSeconds() > 0 || snoozeTime.getMilliseconds() > 0) {
+      snoozeTime.setMinutes(snoozeTime.getMinutes() + 1);
+      snoozeTime.setSeconds(0, 0);
+    }
     await AlarmService.schedule({
       id: `snooze_${alarmId}`,
       hour: snoozeTime.getHours(),
@@ -64,6 +70,16 @@ export async function scheduleSnoozeAlarm(alarmId: number, minutes: number): Pro
   } catch (e) {
     console.warn('Failed to schedule snooze:', e);
   }
+}
+
+/**
+ * Cancel the native snooze alarm scheduled by scheduleSnoozeAlarm.
+ */
+export async function cancelNativeSnoozeAlarm(alarmId: number): Promise<void> {
+  try {
+    const { AlarmService } = require('../../modules/alarm-service/src');
+    await AlarmService.cancel(`snooze_${alarmId}`);
+  } catch {}
 }
 
 /**

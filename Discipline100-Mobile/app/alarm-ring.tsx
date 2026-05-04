@@ -3,12 +3,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { Colors } from '../src/constants/colors';
 import { HOLD_DURATION_MS, SNOOZE_DURATION_MS, snoozeCostCents, formatUSD } from '../src/constants/config';
-import { scheduleSnoozeAlarm } from '../src/utils/alarmSync';
-import { playAlarmAudio, stopAlarmAudio, startSilentLoop, scheduleJsSnooze } from '../src/utils/backgroundAlarm';
-import { scheduleSnoozeNotification } from '../src/utils/localNotifications';
+import { scheduleSnoozeAlarm, cancelNativeSnoozeAlarm } from '../src/utils/alarmSync';
+import { playAlarmAudio, stopAlarmAudio, startSilentLoop, cancelJsSnooze } from '../src/utils/backgroundAlarm';
+import { scheduleSnoozeNotification, cancelSnoozeNotification } from '../src/utils/localNotifications';
 import { useApp, fmt12, guiltMsg } from '../src/context/AppContext';
-import { useAuth } from '../src/context/AuthContext';
-import { deductSnoozeBalance } from '../src/utils/firestoreSync';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
@@ -21,13 +19,12 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const RING_R = 64;
 const RING_C = 2 * Math.PI * RING_R;
 
-type Step = 'alarm' | 'math' | 'hold';
+type Step = 'alarm' | 'math' | 'hold' | 'snoozed';
 
 export default function AlarmRingScreen() {
   const router = useRouter();
   const { alarmId } = useLocalSearchParams<{ alarmId: string }>();
   const { state, dispatch } = useApp();
-  const { user } = useAuth();
   const [step, setStep] = useState<Step>('alarm');
   const [mathProblem, setMathProblem] = useState('');
   const [mathAnswer, setMathAnswer] = useState(0);
@@ -35,21 +32,27 @@ export default function AlarmRingScreen() {
   const [mathError, setMathError] = useState('');
   const [, setHolding] = useState(false);
   const [holdDone, setHoldDone] = useState(false);
+  const [snoozeEndAt, setSnoozeEndAt] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [lastSnoozeCost, setLastSnoozeCost] = useState(0);
   const holdTimer = useRef<NodeJS.Timeout | null>(null);
+  const reTriggerFired = useRef(false);
+  const snoozeInProgress = useRef(false);
 
-  // activeAlarmId is already set by AlarmWatcher before navigating here
-
-  // Use activeAlarmId from state, fall back to route param for first render
   const targetId = state.activeAlarmId ?? (alarmId ? parseInt(alarmId) : null);
   const alarm = targetId ? state.alarms.find(a => a.id === targetId) : undefined;
   const ringRotate = useSharedValue(0);
   const holdProgress = useSharedValue(RING_C);
 
-  useEffect(() => {
+  const startRingAnimation = () => {
     ringRotate.value = withRepeat(
       withSequence(withTiming(20, { duration: 150 }), withTiming(-20, { duration: 150 }), withTiming(0, { duration: 150 })),
       -1
     );
+  };
+
+  useEffect(() => {
+    startRingAnimation();
     playAlarmAudio();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     return () => {
@@ -58,35 +61,81 @@ export default function AlarmRingScreen() {
     };
   }, []);
 
+  // Snoozed step: countdown display + auto re-ring when time is up
+  useEffect(() => {
+    if (step !== 'snoozed') {
+      reTriggerFired.current = false;
+      return;
+    }
+
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((snoozeEndAt - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left <= 0 && !reTriggerFired.current) {
+        reTriggerFired.current = true;
+        // Cancel the fallback notification — we're re-ringing in-app
+        if (targetId) cancelSnoozeNotification(targetId);
+        setStep('alarm');
+        startRingAnimation();
+        playAlarmAudio();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [step, snoozeEndAt]);
+
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${ringRotate.value}deg` }],
   }));
 
-  // Sound is managed by backgroundAlarm.ts (playAlarmAudio / stopAlarmAudio)
-
   // ===== SNOOZE =====
   const handleSnooze = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (snoozeInProgress.current) return;
+    snoozeInProgress.current = true;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    const costCents = state.tier ? snoozeCostCents(state.tier, state.snoozeCount) : 0;
-    const actualCost = Math.min(costCents, state.balance);
+      const costCents = state.tier ? snoozeCostCents(state.tier, state.snoozeCount) : 0;
+      const actualCost = Math.min(costCents, state.balance);
 
-    dispatch({ type: 'SNOOZE' });
-    await stopAlarmAudio();
-    startSilentLoop(); // resume keepalive for next alarm check
+      dispatch({ type: 'SNOOZE' });
+      await stopAlarmAudio();
+      await startSilentLoop();
 
-    if (user && actualCost > 0) {
-      deductSnoozeBalance(user.uid, actualCost);
+      const endAt = Date.now() + SNOOZE_DURATION_MS;
+      setSnoozeEndAt(endAt);
+      setLastSnoozeCost(actualCost);
+
+      if (alarm) {
+        const snoozeMinutes = SNOOZE_DURATION_MS / 60000;
+        // Native and notification fallbacks for killed/backgrounded app
+        await scheduleSnoozeAlarm(alarm.id, snoozeMinutes);
+        await scheduleSnoozeNotification(alarm.id, snoozeMinutes);
+      }
+
+      // Alarm-ring screen handles the countdown itself — no JS watcher needed
+      cancelJsSnooze();
+      setStep('snoozed');
+    } finally {
+      snoozeInProgress.current = false;
     }
+  };
 
-    if (alarm) {
-      const snoozeMinutes = SNOOZE_DURATION_MS / 60000;
-      scheduleJsSnooze(alarm.id, snoozeMinutes); // JS watcher re-fires (works on all iOS)
-      await scheduleSnoozeAlarm(alarm.id, snoozeMinutes); // native fallback (iOS 26+ / Android)
-      scheduleSnoozeNotification(alarm.id, snoozeMinutes); // notification fallback if app is suspended
+  // ===== I'M UP FROM SNOOZED STATE =====
+  const handleImUpFromSnoozed = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Cancel all pending snooze triggers
+    cancelJsSnooze();
+    if (targetId) {
+      cancelNativeSnoozeAlarm(targetId);
+      cancelSnoozeNotification(targetId);
     }
-
-    router.back();
+    generateMathProblem();
+    setStep('math');
+    // No alarm sound replay — user proactively woke up
   };
 
   // ===== DISMISS FLOW =====
@@ -136,7 +185,6 @@ export default function AlarmRingScreen() {
       setTimeout(() => { setMathInput(''); setMathError(''); }, 800);
       return;
     }
-    // Correct!
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => setStep('hold'), 500);
   };
@@ -144,18 +192,22 @@ export default function AlarmRingScreen() {
   // ===== HOLD TO CONFIRM =====
   const startHold = () => {
     if (holdDone) return;
-    if (holdTimer.current) clearTimeout(holdTimer.current); // cancel any prior incomplete hold
+    if (holdTimer.current) clearTimeout(holdTimer.current);
     setHolding(true);
     holdProgress.value = withTiming(0, { duration: HOLD_DURATION_MS });
 
-    holdTimer.current = setTimeout(() => {
+    holdTimer.current = setTimeout(async () => {
       setHoldDone(true);
       setHolding(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      stopAlarmAudio();
+      await stopAlarmAudio();
       setTimeout(() => {
         dispatch({ type: 'DISMISS' });
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(tabs)');
+        }
       }, 600);
     }, HOLD_DURATION_MS);
   };
@@ -173,6 +225,30 @@ export default function AlarmRingScreen() {
   }));
 
   // ===== RENDER =====
+  if (step === 'snoozed') {
+    const mins = Math.floor(secondsLeft / 60);
+    const secs = secondsLeft % 60;
+    const countdownStr = secondsLeft > 0
+      ? `${mins}:${secs.toString().padStart(2, '0')}`
+      : 'NOW!';
+
+    return (
+      <View style={styles.overlay}>
+        <Ionicons name="moon" size={72} color={Colors.yellow} />
+        <Text style={styles.snoozedTitle}>Snoozed</Text>
+        <Text style={styles.snoozedCost}>
+          {lastSnoozeCost === 0 ? 'Free snooze' : `Cost: -${formatUSD(lastSnoozeCost)}`}
+        </Text>
+        <Text style={styles.snoozedCountdownLabel}>NEXT ALARM IN</Text>
+        <Text style={styles.snoozedCountdown}>{countdownStr}</Text>
+        <Pressable style={[styles.imUpBtn, styles.imUpBtnFull]} onPress={handleImUpFromSnoozed}>
+          <Text style={styles.imUpText}>I'M UP!</Text>
+        </Pressable>
+        <Text style={styles.snoozedHint}>You can get up now — no need to wait</Text>
+      </View>
+    );
+  }
+
   if (step === 'math') {
     return (
       <View style={styles.overlay}>
@@ -299,6 +375,9 @@ const styles = StyleSheet.create({
     flex: 1, padding: 18, borderWidth: 3, borderColor: 'rgba(255,215,0,0.4)',
     borderRadius: 16, backgroundColor: 'rgba(255,215,0,0.08)', alignItems: 'center',
   },
+  imUpBtnFull: {
+    flex: 0, width: '100%', marginTop: 40,
+  },
   imUpText: { fontSize: 15, fontWeight: '800', color: Colors.yellow, letterSpacing: 1 },
   snoozeBtn: {
     flex: 1, padding: 18, backgroundColor: Colors.yellow, borderRadius: 16, alignItems: 'center',
@@ -306,6 +385,13 @@ const styles = StyleSheet.create({
   },
   snoozeText: { fontSize: 15, fontWeight: '800', color: Colors.black, letterSpacing: 1 },
   snoozeHint: { fontSize: 11, fontWeight: '700', color: Colors.black, opacity: 0.6, marginTop: 3 },
+
+  // Snoozed step
+  snoozedTitle: { fontSize: 28, fontWeight: '900', color: Colors.white, marginTop: 24 },
+  snoozedCost: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.45)', marginTop: 6 },
+  snoozedCountdownLabel: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: 2, marginTop: 36 },
+  snoozedCountdown: { fontSize: 64, fontWeight: '700', color: Colors.yellow, letterSpacing: -2, marginTop: 4 },
+  snoozedHint: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.3)', marginTop: 20, textAlign: 'center' },
 
   // Math challenge
   mathEmoji: { fontSize: 48, marginBottom: 12 },

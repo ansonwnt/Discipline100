@@ -1,7 +1,7 @@
 import { View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
@@ -9,7 +9,7 @@ import { AppProvider, useApp } from '../src/context/AppContext';
 import { ThemeProvider } from '../src/context/ThemeContext';
 import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { STRIPE_PUBLISHABLE_KEY } from '../src/constants/stripe';
-import { startAlarmWatcher, stopAlarmWatcher } from '../src/utils/backgroundAlarm';
+import { startAlarmWatcher, stopAlarmWatcher, stopAlarmAudio, isAlarmSoundPlaying } from '../src/utils/backgroundAlarm';
 import * as Notifications from 'expo-notifications';
 import { configureNotificationHandler, cancelSnoozeNotification } from '../src/utils/localNotifications';
 
@@ -23,27 +23,64 @@ SplashScreen.preventAutoHideAsync();
 function AlarmWatcher() {
   const { state, dispatch } = useApp();
   const router = useRouter();
+  const pathname = usePathname();
+  const prevActiveAlarmId = useRef<number | null>(null);
 
+  // Restart watcher when alarms change. No cleanup here — startAlarmWatcher clears its
+  // own interval internally, avoiding the brief silent-loop gap caused by stopAlarmWatcher().
   useEffect(() => {
     startAlarmWatcher(state.alarms, (id) => {
-      cancelSnoozeNotification(id); // cancel pending snooze notification if JS timer fires first
+      cancelSnoozeNotification(id);
       dispatch({ type: 'TRIGGER_ALARM', id });
       router.push(`/alarm-ring?alarmId=${id}`);
     });
-    return () => { stopAlarmWatcher(); };
   }, [state.alarms]);
+
+  // Stop everything only on unmount (sign-out / app teardown).
+  useEffect(() => {
+    return () => { stopAlarmWatcher(); };
+  }, []);
 
   // Handle notification tap (killed-app fallback: user taps banner to open alarm-ring)
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data as { alarmId?: number };
-      if (data?.alarmId) {
+      if (data?.alarmId && !pathname.includes('alarm-ring')) {
         dispatch({ type: 'TRIGGER_ALARM', id: data.alarmId });
         router.push(`/alarm-ring?alarmId=${data.alarmId}`);
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [pathname]);
+
+  // Stop audio when alarm is toggled off or deleted while actively ringing
+  useEffect(() => {
+    const prev = prevActiveAlarmId.current;
+    prevActiveAlarmId.current = state.activeAlarmId;
+
+    if (prev === null) return;
+
+    if (state.activeAlarmId === null) {
+      // activeAlarmId was cleared externally (e.g. DELETE_ALARM).
+      // Only act if audio is still playing — normal DISMISS already handled it.
+      const wasPlaying = isAlarmSoundPlaying();
+      stopAlarmAudio();
+      if (wasPlaying && pathname.includes('alarm-ring') && router.canGoBack()) {
+        router.back();
+      }
+      return;
+    }
+
+    // activeAlarmId still set but alarm was disabled (TOGGLE_ALARM)
+    const active = state.alarms.find(a => a.id === state.activeAlarmId);
+    if (!active || !active.enabled) {
+      stopAlarmAudio();
+      dispatch({ type: 'DISMISS' });
+      if (pathname.includes('alarm-ring') && router.canGoBack()) {
+        router.back();
+      }
+    }
+  }, [state.alarms, state.activeAlarmId]);
 
   return null;
 }

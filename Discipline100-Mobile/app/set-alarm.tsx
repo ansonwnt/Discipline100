@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, FlatList } from 'react-native';
+import { View, Text, Pressable, StyleSheet, FlatList, Modal, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/context/ThemeContext';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const TIPS_SEEN_KEY = 'd100_alarm_tips_seen';
+
+const TIPS = [
+  {
+    icon: 'volume-mute-outline' as const,
+    label: 'Turn off Silent Mode',
+    body: 'Your ringer must be ON. Silent switch and Do Not Disturb will block the alarm.',
+  },
+  {
+    icon: 'phone-portrait-outline' as const,
+    label: 'Don\'t force-quit the app',
+    body: 'Just press Home to background it. Swiping it away can prevent iOS from firing notifications.',
+  },
+  {
+    icon: 'volume-high-outline' as const,
+    label: 'Turn your volume up',
+    body: 'Alarms use the ringer channel — not media. Press the side volume buttons before you sleep.',
+  },
+  {
+    icon: 'battery-half-outline' as const,
+    label: 'Disable Low Power Mode',
+    body: 'Low Power Mode can delay or skip background notifications. Plug in overnight if possible.',
+  },
+  {
+    icon: 'notifications-outline' as const,
+    label: 'Allow notifications',
+    body: 'Go to Settings → Notifications → Discipline100 and make sure they\'re enabled.',
+  },
+];
 
 const ITEM_HEIGHT = 54;
 const VISIBLE_ITEMS = 5;
@@ -19,7 +50,6 @@ const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2
 const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
 const periods = ['AM', 'PM'];
 
-// Triple the data for infinite scroll illusion
 function tripleData(data: string[]) {
   return [...data, ...data, ...data];
 }
@@ -46,7 +76,6 @@ function ScrollWheel({ data, initial, onSelect, wrap = false }: WheelProps) {
     let index = Math.round(y / ITEM_HEIGHT);
 
     if (wrap) {
-      // Recenter if scrolled too far
       const realIndex = ((index - offset) % data.length + data.length) % data.length;
       const centerIndex = realIndex + offset;
       if (Math.abs(index - centerIndex) > data.length / 2) {
@@ -88,9 +117,12 @@ export default function SetAlarmScreen() {
   const router = useRouter();
   const { state, dispatch } = useApp();
   const { theme } = useTheme();
-  const [hourIdx, setHourIdx] = useState(6); // 07
-  const [minIdx, setMinIdx] = useState(0);   // 00
-  const [perIdx, setPerIdx] = useState(0);   // AM
+  const [hourIdx, setHourIdx] = useState(6);
+  const [minIdx, setMinIdx] = useState(0);
+  const [perIdx, setPerIdx] = useState(0);
+  const [showTips, setShowTips] = useState(false);
+  const [checked, setChecked] = useState<boolean[]>(TIPS.map(() => false));
+  const submitting = useRef(false);
 
   const bounceY = useSharedValue(0);
   const previewScale = useSharedValue(1);
@@ -125,8 +157,13 @@ export default function SetAlarmScreen() {
 
   const getTime12 = () => `${hours[hourIdx]}:${minutes[minIdx]} ${periods[perIdx]}`;
 
-  const handleSet = () => {
-    // If no deposit yet, redirect to tier selection
+  const toggleCheck = (i: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setChecked(prev => prev.map((v, idx) => idx === i ? !v : v));
+  };
+
+  const handleSet = async () => {
+    if (submitting.current) return;
     if (state.balance <= 0 || !state.tier) {
       router.push('/tier-selection?from=set-alarm');
       return;
@@ -135,16 +172,30 @@ export default function SetAlarmScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    // Native scheduling handled automatically by syncAlarmsToNative in AppContext
+    submitting.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     dispatch({ type: 'ADD_ALARM', time: getTime24() });
+
+    const seen = await AsyncStorage.getItem(TIPS_SEEN_KEY);
+    if (!seen) {
+      setShowTips(true);
+    } else {
+      router.back();
+    }
+  };
+
+  const handleDismiss = async () => {
+    await AsyncStorage.setItem(TIPS_SEEN_KEY, '1');
+    setShowTips(false);
     router.back();
   };
+
+  const allChecked = checked.every(Boolean);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => showTips ? handleDismiss() : router.back()}>
           <Ionicons name="arrow-back" size={20} color={Colors.black} />
         </Pressable>
         <Text style={styles.title}>Set Alarm</Text>
@@ -152,7 +203,6 @@ export default function SetAlarmScreen() {
       </View>
 
       <View style={styles.body}>
-        {/* Mascot */}
         <View style={styles.mascot}>
           <Animated.View style={mascotStyle}>
             <Ionicons name="alarm" size={64} color={Colors.brown} />
@@ -161,7 +211,6 @@ export default function SetAlarmScreen() {
           <Text style={styles.mascotSub}>Scroll to pick your time</Text>
         </View>
 
-        {/* Picker */}
         <View style={styles.pickerCard}>
           <View style={styles.pickerRow}>
             <ScrollWheel data={hours} initial={6} onSelect={(i) => { setHourIdx(i); popPreview(); }} wrap />
@@ -171,13 +220,11 @@ export default function SetAlarmScreen() {
           </View>
         </View>
 
-        {/* Preview */}
         <Animated.View style={[styles.previewPill, previewStyle]}>
           <Text style={styles.previewText}>{getTime12()}</Text>
         </Animated.View>
         <Text style={styles.tip}>Swipe up & down or scroll</Text>
 
-        {/* Buttons */}
         <View style={styles.actions}>
           <Pressable style={styles.setBtn} onPress={handleSet}>
             <Text style={styles.setBtnText}>SET ALARM</Text>
@@ -187,6 +234,58 @@ export default function SetAlarmScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* One-time alarm reliability checklist */}
+      <Modal visible={showTips} transparent animationType="slide" onRequestClose={handleDismiss}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            {/* Handle */}
+            <View style={styles.handle} />
+
+            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
+              {/* Header */}
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetIconWrap}>
+                  <Ionicons name="alarm" size={28} color={Colors.brown} />
+                </View>
+                <Text style={styles.sheetTitle}>Before your alarm rings</Text>
+                <Text style={styles.sheetSub}>
+                  Check these 5 things tonight so your alarm works exactly when you need it.
+                </Text>
+              </View>
+
+              {/* Checklist */}
+              <View style={styles.checklist}>
+                {TIPS.map((tip, i) => (
+                  <Pressable key={tip.label} style={styles.tipRow} onPress={() => toggleCheck(i)}>
+                    <View style={[styles.checkbox, checked[i] && styles.checkboxDone]}>
+                      {checked[i] && <Ionicons name="checkmark" size={14} color={Colors.black} />}
+                    </View>
+                    <View style={styles.tipIconWrap}>
+                      <Ionicons name={tip.icon} size={20} color={checked[i] ? Colors.grayDark : Colors.brown} />
+                    </View>
+                    <View style={styles.tipText}>
+                      <Text style={[styles.tipLabel, checked[i] && styles.tipLabelDone]}>{tip.label}</Text>
+                      <Text style={styles.tipBody}>{tip.body}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* CTA — pinned outside ScrollView so it's always reachable */}
+            <Pressable
+              style={[styles.ctaBtn, allChecked && styles.ctaBtnReady]}
+              onPress={handleDismiss}
+            >
+              <Text style={styles.ctaBtnText}>
+                {allChecked ? 'I\'M READY — LET\'S GO' : 'GOT IT'}
+              </Text>
+              <Ionicons name="arrow-forward" size={18} color={Colors.black} />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -208,7 +307,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   mascot: { alignItems: 'center', marginBottom: 16 },
-  mascotIcon: { fontSize: 64 },
   mascotMsg: { fontSize: 18, fontWeight: '800', color: Colors.black, marginTop: 8 },
   mascotSub: { fontSize: 13, fontWeight: '600', color: Colors.grayDark, marginTop: 2 },
   pickerCard: {
@@ -232,12 +330,8 @@ const styles = StyleSheet.create({
     height: ITEM_HEIGHT, backgroundColor: Colors.yellow, borderRadius: 14, zIndex: -1,
     shadowColor: Colors.yellow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8,
   },
-  wheelItem: {
-    height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center',
-  },
-  wheelText: {
-    fontSize: 28, fontWeight: '700', color: Colors.black,
-  },
+  wheelItem: { height: ITEM_HEIGHT, justifyContent: 'center', alignItems: 'center' },
+  wheelText: { fontSize: 28, fontWeight: '700', color: Colors.black },
   previewPill: {
     marginTop: 16, backgroundColor: Colors.yellowLight, borderWidth: 2,
     borderColor: Colors.yellow, borderRadius: 40, paddingHorizontal: 24, paddingVertical: 8,
@@ -255,4 +349,57 @@ const styles = StyleSheet.create({
     paddingVertical: 16, borderWidth: 2, borderColor: Colors.grayMid, borderRadius: 16, alignItems: 'center',
   },
   cancelBtnText: { fontSize: 15, fontWeight: '700', color: Colors.grayDark },
+
+  // Modal
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: Colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 24, paddingBottom: 40, paddingTop: 12,
+    maxHeight: '90%',
+  },
+  sheetScroll: { flex: 1 },
+  handle: {
+    alignSelf: 'center', width: 40, height: 4, borderRadius: 2,
+    backgroundColor: Colors.grayMid, marginBottom: 20,
+  },
+  sheetHeader: { alignItems: 'center', marginBottom: 24 },
+  sheetIconWrap: {
+    width: 60, height: 60, borderRadius: 20, backgroundColor: Colors.yellowLight,
+    borderWidth: 2, borderColor: Colors.yellow,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 14,
+  },
+  sheetTitle: { fontSize: 20, fontWeight: '900', color: Colors.black, marginBottom: 6 },
+  sheetSub: {
+    fontSize: 13, fontWeight: '600', color: Colors.grayDark,
+    textAlign: 'center', lineHeight: 19,
+  },
+  checklist: { gap: 16, marginBottom: 28 },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  checkbox: {
+    width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: Colors.grayMid,
+    justifyContent: 'center', alignItems: 'center', flexShrink: 0, marginTop: 1,
+  },
+  checkboxDone: {
+    backgroundColor: Colors.yellow, borderColor: Colors.yellow,
+  },
+  tipIconWrap: {
+    width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.gray,
+    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+  },
+  tipText: { flex: 1 },
+  tipLabel: { fontSize: 14, fontWeight: '800', color: Colors.black, marginBottom: 2 },
+  tipLabelDone: { color: Colors.grayDark, textDecorationLine: 'line-through' },
+  tipBody: { fontSize: 12, fontWeight: '600', color: Colors.grayDark, lineHeight: 17 },
+  ctaBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 20, paddingVertical: 18, backgroundColor: Colors.yellow, borderRadius: 16,
+    shadowColor: Colors.yellow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8,
+    elevation: 6,
+  },
+  ctaBtnReady: {
+    shadowOpacity: 0.5, shadowRadius: 12,
+  },
+  ctaBtnText: { fontSize: 16, fontWeight: '900', color: Colors.black, letterSpacing: 0.5 },
 });

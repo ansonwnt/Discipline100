@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, FlatList, Modal, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, FlatList, Modal, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,34 +11,26 @@ import { useTheme } from '../src/context/ThemeContext';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { playAlarmAudio, stopAlarmAudio } from '../src/utils/backgroundAlarm';
 
 const TIPS_SEEN_KEY = 'd100_alarm_tips_seen';
+const ALARM_GUIDE_URL = 'https://ansonwnt.github.io/Discipline100/alarm-reliability.html';
 
 const TIPS = [
   {
-    icon: 'volume-mute-outline' as const,
-    label: 'Turn off Silent Mode',
-    body: 'Your ringer must be ON. Silent switch and Do Not Disturb will block the alarm.',
+    icon: 'notifications-outline' as const,
+    label: 'Keep notifications on',
+    body: 'Required for alarm alerts when Discipline100 is not open.',
+  },
+  {
+    icon: 'moon-outline' as const,
+    label: 'Allow Discipline100 in Focus/Sleep Mode',
+    body: 'So Focus settings do not silence your alarm notification.',
   },
   {
     icon: 'phone-portrait-outline' as const,
-    label: 'Don\'t force-quit the app',
-    body: 'Just press Home to background it. Swiping it away can prevent iOS from firing notifications.',
-  },
-  {
-    icon: 'volume-high-outline' as const,
-    label: 'Turn your volume up',
-    body: 'Alarms use the ringer channel — not media. Press the side volume buttons before you sleep.',
-  },
-  {
-    icon: 'battery-half-outline' as const,
-    label: 'Disable Low Power Mode',
-    body: 'Low Power Mode can delay or skip background notifications. Plug in overnight if possible.',
-  },
-  {
-    icon: 'notifications-outline' as const,
-    label: 'Allow notifications',
-    body: 'Go to Settings → Notifications → Discipline100 and make sure they\'re enabled.',
+    label: 'Leave Discipline100 open in the background',
+    body: 'Do not swipe the app away before your alarm.',
   },
 ];
 
@@ -120,9 +112,12 @@ export default function SetAlarmScreen() {
   const [hourIdx, setHourIdx] = useState(6);
   const [minIdx, setMinIdx] = useState(0);
   const [perIdx, setPerIdx] = useState(0);
+  const [showTestPrompt, setShowTestPrompt] = useState(false);
+  const [isTestingSound, setIsTestingSound] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [checked, setChecked] = useState<boolean[]>(TIPS.map(() => false));
   const submitting = useRef(false);
+  const testTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bounceY = useSharedValue(0);
   const previewScale = useSharedValue(1);
@@ -132,6 +127,13 @@ export default function SetAlarmScreen() {
       withSequence(withTiming(-12, { duration: 1000 }), withTiming(0, { duration: 1000 })),
       -1, true
     );
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (testTimer.current) clearTimeout(testTimer.current);
+      stopAlarmAudio();
+    };
   }, []);
 
   const mascotStyle = useAnimatedStyle(() => ({
@@ -178,16 +180,42 @@ export default function SetAlarmScreen() {
 
     const seen = await AsyncStorage.getItem(TIPS_SEEN_KEY);
     if (!seen) {
-      setShowTips(true);
+      setShowTestPrompt(true);
     } else {
       router.back();
     }
   };
 
   const handleDismiss = async () => {
+    if (testTimer.current) clearTimeout(testTimer.current);
+    await stopAlarmAudio();
+    setShowTestPrompt(false);
+    setIsTestingSound(false);
     await AsyncStorage.setItem(TIPS_SEEN_KEY, '1');
     setShowTips(false);
     router.back();
+  };
+
+  const showReliabilityTips = async () => {
+    if (testTimer.current) clearTimeout(testTimer.current);
+    await stopAlarmAudio();
+    setShowTestPrompt(false);
+    setIsTestingSound(false);
+    setShowTips(true);
+  };
+
+  const startSoundTest = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    setIsTestingSound(true);
+    await playAlarmAudio();
+    testTimer.current = setTimeout(() => {
+      showReliabilityTips();
+    }, 5000);
+  };
+
+  const openAlarmGuide = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Linking.openURL(ALARM_GUIDE_URL);
   };
 
   const allChecked = checked.every(Boolean);
@@ -195,7 +223,7 @@ export default function SetAlarmScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => showTips ? handleDismiss() : router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => (showTips || showTestPrompt) ? handleDismiss() : router.back()}>
           <Ionicons name="arrow-back" size={20} color={Colors.black} />
         </Pressable>
         <Text style={styles.title}>Set Alarm</Text>
@@ -235,6 +263,40 @@ export default function SetAlarmScreen() {
         </View>
       </View>
 
+      {/* First alarm sound test */}
+      <Modal visible={showTestPrompt} transparent animationType="slide" onRequestClose={showReliabilityTips}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <View style={styles.handle} />
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetIconWrap}>
+                <Ionicons name={isTestingSound ? 'volume-high-outline' : 'alarm'} size={28} color={Colors.brown} />
+              </View>
+              <Text style={styles.sheetTitle}>{isTestingSound ? 'Alarm Sound Test' : 'Test alarm sound?'}</Text>
+              <Text style={styles.sheetSub}>
+                {isTestingSound ? 'Make sure you can hear this clearly.' : 'Play a 5-second test before relying on this alarm.'}
+              </Text>
+            </View>
+
+            {isTestingSound ? (
+              <Pressable style={styles.ctaBtn} onPress={showReliabilityTips}>
+                <Text style={styles.ctaBtnText}>STOP TEST</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.testActions}>
+                <Pressable style={styles.ctaBtn} onPress={startSoundTest}>
+                  <Text style={styles.ctaBtnText}>TEST NOW</Text>
+                  <Ionicons name="volume-high-outline" size={18} color={Colors.black} />
+                </Pressable>
+                <Pressable style={styles.skipBtn} onPress={showReliabilityTips}>
+                  <Text style={styles.skipBtnText}>Skip</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* One-time alarm reliability checklist */}
       <Modal visible={showTips} transparent animationType="slide" onRequestClose={handleDismiss}>
         <View style={styles.overlay}>
@@ -248,9 +310,9 @@ export default function SetAlarmScreen() {
                 <View style={styles.sheetIconWrap}>
                   <Ionicons name="alarm" size={28} color={Colors.brown} />
                 </View>
-                <Text style={styles.sheetTitle}>Before your alarm rings</Text>
+                <Text style={styles.sheetTitle}>Sound Test Complete</Text>
                 <Text style={styles.sheetSub}>
-                  Check these 5 things tonight so your alarm works exactly when you need it.
+                  Before your alarm:
                 </Text>
               </View>
 
@@ -271,6 +333,11 @@ export default function SetAlarmScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              <Pressable style={styles.guideLink} onPress={openAlarmGuide}>
+                <Ionicons name="help-circle-outline" size={18} color={Colors.brown} />
+                <Text style={styles.guideLinkText}>How to allow Discipline100 in Focus/Sleep Mode</Text>
+              </Pressable>
             </ScrollView>
 
             {/* CTA — pinned outside ScrollView so it's always reachable */}
@@ -392,6 +459,17 @@ const styles = StyleSheet.create({
   tipLabel: { fontSize: 14, fontWeight: '800', color: Colors.black, marginBottom: 2 },
   tipLabelDone: { color: Colors.grayDark, textDecorationLine: 'line-through' },
   tipBody: { fontSize: 12, fontWeight: '600', color: Colors.grayDark, lineHeight: 17 },
+  testActions: { gap: 12 },
+  skipBtn: {
+    paddingVertical: 14, borderWidth: 2, borderColor: Colors.grayMid, borderRadius: 16, alignItems: 'center',
+  },
+  skipBtnText: { fontSize: 15, fontWeight: '800', color: Colors.grayDark },
+  guideLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.yellowLight, borderWidth: 2, borderColor: Colors.yellow,
+    borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8,
+  },
+  guideLinkText: { flex: 1, fontSize: 13, fontWeight: '800', color: Colors.brown, textAlign: 'center' },
   ctaBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginTop: 20, paddingVertical: 18, backgroundColor: Colors.yellow, borderRadius: 16,

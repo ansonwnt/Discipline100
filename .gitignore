@@ -4,6 +4,7 @@ android/
 .expo/
 *.jks
 *.p8
+*.textClipping
 *.p12
 *.key
 *.mobileprovision

@@ -11,7 +11,7 @@ import { AnimatedSplash } from '../src/components/AnimatedSplash';
 import { STRIPE_PUBLISHABLE_KEY } from '../src/constants/stripe';
 import { startAlarmWatcher, stopAlarmWatcher } from '../src/utils/backgroundAlarm';
 import * as Notifications from 'expo-notifications';
-import { configureNotificationHandler } from '../src/utils/localNotifications';
+import { configureNotificationHandler, cancelSnoozeNotification } from '../src/utils/localNotifications';
 
 // Configure notification appearance before any component mounts
 configureNotificationHandler();
@@ -26,6 +26,7 @@ function AlarmWatcher() {
 
   useEffect(() => {
     startAlarmWatcher(state.alarms, (id) => {
+      cancelSnoozeNotification(id); // cancel pending snooze notification if JS timer fires first
       dispatch({ type: 'TRIGGER_ALARM', id });
       router.push(`/alarm-ring?alarmId=${id}`);
     });

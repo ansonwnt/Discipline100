@@ -61,6 +61,34 @@ async function scheduleAlarmNotification(alarm: Alarm): Promise<void> {
   });
 }
 
+/** Schedule a one-time notification for a snoozed alarm. */
+export async function scheduleSnoozeNotification(alarmId: number, minutes: number): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `snooze_notif_${alarmId}`,
+      content: {
+        title: 'Snooze Over — Wake Up!',
+        body: 'Your Discipline100 alarm is ringing.',
+        sound: true,
+        data: { alarmId },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(Date.now() + minutes * 60 * 1000),
+      },
+    });
+  } catch (e) {
+    console.warn('scheduleSnoozeNotification failed', e);
+  }
+}
+
+/** Cancel a pending snooze notification (called when JS timer fires in-app). */
+export async function cancelSnoozeNotification(alarmId: number): Promise<void> {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`snooze_notif_${alarmId}`);
+  } catch {}
+}
+
 /**
  * Cancel all existing alarm notifications and re-schedule for currently
  * enabled alarms. Mirrors the pattern in syncAlarmsToNative.

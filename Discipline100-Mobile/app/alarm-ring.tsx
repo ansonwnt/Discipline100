@@ -5,6 +5,7 @@ import { Colors } from '../src/constants/colors';
 import { HOLD_DURATION_MS, SNOOZE_DURATION_MS, snoozeCostCents, formatUSD } from '../src/constants/config';
 import { scheduleSnoozeAlarm } from '../src/utils/alarmSync';
 import { playAlarmAudio, stopAlarmAudio, startSilentLoop, scheduleJsSnooze } from '../src/utils/backgroundAlarm';
+import { scheduleSnoozeNotification } from '../src/utils/localNotifications';
 import { useApp, fmt12, guiltMsg } from '../src/context/AppContext';
 import { useAuth } from '../src/context/AuthContext';
 import { deductSnoozeBalance } from '../src/utils/firestoreSync';
@@ -82,6 +83,7 @@ export default function AlarmRingScreen() {
       const snoozeMinutes = SNOOZE_DURATION_MS / 60000;
       scheduleJsSnooze(alarm.id, snoozeMinutes); // JS watcher re-fires (works on all iOS)
       await scheduleSnoozeAlarm(alarm.id, snoozeMinutes); // native fallback (iOS 26+ / Android)
+      scheduleSnoozeNotification(alarm.id, snoozeMinutes); // notification fallback if app is suspended
     }
 
     router.back();

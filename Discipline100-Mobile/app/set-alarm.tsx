@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, FlatList, Modal, ScrollView, Linking } from 'react-native';
+import { View, Text, Pressable, StyleSheet, FlatList, Modal, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useRef, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,10 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/context/ThemeContext';
 import Animated, { useAnimatedStyle, withRepeat, withTiming, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
 import { useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { playAlarmAudio, stopAlarmAudio } from '../src/utils/backgroundAlarm';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TIPS_SEEN_KEY = 'd100_alarm_tips_seen';
+const TIPS_SEEN_KEY = 'd100_alarm_tips_opted_out_v2';
 const ALARM_GUIDE_URL = 'https://ansonwnt.github.io/Discipline100/alarm-reliability.html';
 
 const TIPS = [
@@ -116,6 +116,7 @@ export default function SetAlarmScreen() {
   const [isTestingSound, setIsTestingSound] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [checked, setChecked] = useState<boolean[]>(TIPS.map(() => false));
+  const [dontShowAgain, setDontShowAgain] = useState(false);
   const submitting = useRef(false);
   const testTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -179,10 +180,11 @@ export default function SetAlarmScreen() {
     dispatch({ type: 'ADD_ALARM', time: getTime24() });
 
     const seen = await AsyncStorage.getItem(TIPS_SEEN_KEY);
-    if (!seen) {
-      setShowTestPrompt(true);
-    } else {
+    if (seen) {
       router.back();
+    } else {
+      setDontShowAgain(false);
+      setShowTestPrompt(true);
     }
   };
 
@@ -191,9 +193,16 @@ export default function SetAlarmScreen() {
     await stopAlarmAudio();
     setShowTestPrompt(false);
     setIsTestingSound(false);
-    await AsyncStorage.setItem(TIPS_SEEN_KEY, '1');
+    if (dontShowAgain) {
+      await AsyncStorage.setItem(TIPS_SEEN_KEY, '1');
+    }
     setShowTips(false);
     router.back();
+  };
+
+  const toggleDontShowAgain = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDontShowAgain(prev => !prev);
   };
 
   const showReliabilityTips = async () => {
@@ -304,41 +313,44 @@ export default function SetAlarmScreen() {
             {/* Handle */}
             <View style={styles.handle} />
 
-            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false} bounces={false}>
-              {/* Header */}
-              <View style={styles.sheetHeader}>
-                <View style={styles.sheetIconWrap}>
-                  <Ionicons name="alarm" size={28} color={Colors.brown} />
-                </View>
-                <Text style={styles.sheetTitle}>Sound Test Complete</Text>
-                <Text style={styles.sheetSub}>
-                  Before your alarm:
-                </Text>
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetIconWrap}>
+                <Ionicons name="alarm" size={28} color={Colors.brown} />
               </View>
+              <Text style={styles.sheetTitle}>Sound Test Complete</Text>
+              <Text style={styles.sheetSub}>Before your alarm:</Text>
+            </View>
 
-              {/* Checklist */}
-              <View style={styles.checklist}>
-                {TIPS.map((tip, i) => (
-                  <Pressable key={tip.label} style={styles.tipRow} onPress={() => toggleCheck(i)}>
-                    <View style={[styles.checkbox, checked[i] && styles.checkboxDone]}>
-                      {checked[i] && <Ionicons name="checkmark" size={14} color={Colors.black} />}
-                    </View>
-                    <View style={styles.tipIconWrap}>
-                      <Ionicons name={tip.icon} size={20} color={checked[i] ? Colors.grayDark : Colors.brown} />
-                    </View>
-                    <View style={styles.tipText}>
-                      <Text style={[styles.tipLabel, checked[i] && styles.tipLabelDone]}>{tip.label}</Text>
-                      <Text style={styles.tipBody}>{tip.body}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+            {/* Checklist */}
+            <View style={styles.checklist}>
+              {TIPS.map((tip, i) => (
+                <Pressable key={tip.label} style={styles.tipRow} onPress={() => toggleCheck(i)}>
+                  <View style={[styles.checkbox, checked[i] && styles.checkboxDone]}>
+                    {checked[i] && <Ionicons name="checkmark" size={14} color={Colors.black} />}
+                  </View>
+                  <View style={styles.tipIconWrap}>
+                    <Ionicons name={tip.icon} size={20} color={checked[i] ? Colors.grayDark : Colors.brown} />
+                  </View>
+                  <View style={styles.tipText}>
+                    <Text style={[styles.tipLabel, checked[i] && styles.tipLabelDone]}>{tip.label}</Text>
+                    <Text style={styles.tipBody}>{tip.body}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable style={styles.guideLink} onPress={openAlarmGuide}>
+              <Ionicons name="help-circle-outline" size={18} color={Colors.brown} />
+              <Text style={styles.guideLinkText}>How to allow Discipline100 in Focus/Sleep Mode</Text>
+            </Pressable>
+
+            <Pressable style={styles.dontShowRow} onPress={toggleDontShowAgain}>
+              <View style={[styles.smallCheckbox, dontShowAgain && styles.checkboxDone]}>
+                {dontShowAgain && <Ionicons name="checkmark" size={13} color={Colors.black} />}
               </View>
-
-              <Pressable style={styles.guideLink} onPress={openAlarmGuide}>
-                <Ionicons name="help-circle-outline" size={18} color={Colors.brown} />
-                <Text style={styles.guideLinkText}>How to allow Discipline100 in Focus/Sleep Mode</Text>
-              </Pressable>
-            </ScrollView>
+              <Text style={styles.dontShowText}>Don't show this again</Text>
+            </Pressable>
 
             {/* CTA — pinned outside ScrollView so it's always reachable */}
             <Pressable
@@ -426,7 +438,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingBottom: 40, paddingTop: 12,
     maxHeight: '90%',
   },
-  sheetScroll: { flex: 1 },
   handle: {
     alignSelf: 'center', width: 40, height: 4, borderRadius: 2,
     backgroundColor: Colors.grayMid, marginBottom: 20,
@@ -470,6 +481,15 @@ const styles = StyleSheet.create({
     borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8,
   },
   guideLinkText: { flex: 1, fontSize: 13, fontWeight: '800', color: Colors.brown, textAlign: 'center' },
+  dontShowRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 12, marginTop: 4,
+  },
+  smallCheckbox: {
+    width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: Colors.grayMid,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  dontShowText: { fontSize: 13, fontWeight: '700', color: Colors.grayDark },
   ctaBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginTop: 20, paddingVertical: 18, backgroundColor: Colors.yellow, borderRadius: 16,

@@ -149,6 +149,9 @@ function reducer(state: AppState, action: Action): AppState {
         activeAlarmId: null,
         snoozeCount: 0,
         history: newHistory,
+        alarms: state.alarms.map(a =>
+          a.id === state.activeAlarmId ? { ...a, enabled: false } : a
+        ),
       };
     }
 

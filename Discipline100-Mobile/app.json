@@ -49,8 +49,15 @@
         "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d0b3c4f8-a500-4f03-93ad-4dab0c8fb57e"
+    },
     "plugins": [
       "expo-router",
+      "expo-updates",
       ["expo-notifications", { "sounds": ["./assets/alarm.wav"] }],
       "./modules/alarm-service/app.plugin.js",
       "@react-native-firebase/app",
